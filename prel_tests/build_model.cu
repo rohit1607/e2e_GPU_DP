@@ -806,12 +806,12 @@ int main(){
 
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
-    std::string prob_name = "test_g200x200x200_r5k";
+    std::string prob_name = "test_g70x70x5_r5k";
     std::string op_FnamePfx = "data/model_output/" + prob_name + "/"; //path for storing op npy data.
 
-    int32_t nt = 200;
+    int32_t nt = 5;
     int32_t is_stationary = 0;
-    int32_t gsize = 200;
+    int32_t gsize = 70;
     int32_t num_actions = 16;
     int32_t num_rzns = 5000;
     int32_t bDimx = num_rzns;
