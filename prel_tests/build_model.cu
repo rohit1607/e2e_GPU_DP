@@ -806,20 +806,20 @@ int main(){
 
 
  // // 10x10x10 grid. jet across grid varying between 1-2 units/sec.
-    std::string prob_name = "all_jet_g100x100x100_r5k";
+    std::string prob_name = "test_g200x200x200_r5k";
     std::string op_FnamePfx = "data/model_output/" + prob_name + "/"; //path for storing op npy data.
 
-    int32_t nt = 100;
+    int32_t nt = 200;
     int32_t is_stationary = 0;
-    int32_t gsize = 100;
-    int32_t num_actions = 8;
+    int32_t gsize = 200;
+    int32_t num_actions = 16;
     int32_t num_rzns = 5000;
     int32_t bDimx = num_rzns;
     float F = 1;
-    float r_outbound = -1000;
+    float r_outbound = -100;
     float r_terminal = 100;
-    int32_t i_term = 50;
-    int32_t j_term = 96;
+    int32_t i_term = 2;
+    int32_t j_term = 7;
     float nmodes = 1;
     float x0 = 0.5;
     float y0 = 0.5;
@@ -933,6 +933,8 @@ int main(){
     thrust::device_vector<float> D_xs(gsize);
     thrust::device_vector<float> D_ys(gsize);
 
+    std::cout << "Initialised D_xs, D_ys!" << std::endl;
+
     // initialise reuseable host vectors
     thrust::host_vector<int32_t> H_coo_len_per_ac(num_actions);
     thrust::host_vector<int32_t> H_Aarr_of_cooS1[(int)num_actions];
@@ -952,12 +954,20 @@ int main(){
     for (int i =0; i < num_actions; i++){
         H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
     }
+    std::cout << "Initialised H_Aarrs!" << std::endl;
 
 
     //initialise master_value_vector for sort_by_key
     int ncells = gsize*gsize;
     int arr_size = ncells * num_rzns;
     int NcNrNa = arr_size*num_actions;   // abv for ncells*num_rzns*num_actions
+    std::cout << "NcNrNa = " << NcNrNa << "\n";
+    std::cout << "arr_size = " << arr_size << "\n"; 
+    std::cout << "gsize = " << gsize << "\n"; 
+    std::cout << "ncells = " << ncells << "\n"; 
+    std::cout << "gsize = " << gsize << "\n"; 
+
+
     assert (NcNrNa < (int)2e9);          // to ensure indices stay within datatype limit
 
     thrust::host_vector<int32_t> H_master_vals(NcNrNa); //TODO: Chage name to H_mastera_sortVals
@@ -965,10 +975,13 @@ int main(){
 
     for (int i = 0; i < NcNrNa; i++)
         H_master_vals[i] = (int32_t)(i/num_rzns);
+
+    std::cout << "Initialised H_master_vals!" << std::endl;
+
     thrust::device_vector<int32_t> D_master_vals(NcNrNa);
     D_master_vals = H_master_vals;
     temp_test = D_master_vals;
-    // std::cout << "temp_test\n" ;
+    std::cout << "temp_test\n" ;
     
     // for (int i = (NcNrNa) - 10; i < NcNrNa; i++){
     //     std::cout << i << "---\n";

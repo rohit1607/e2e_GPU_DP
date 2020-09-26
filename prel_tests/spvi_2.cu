@@ -699,7 +699,7 @@ int solver_spvi_solve(thrust::host_vector<uint32_t>  &p_out_policy_vec,
 }
 
 int main(){
-    std::string prob_name = "all_jet_g100x100x100_r5k/";
+    std::string prob_name = "test_g200x200x200_r5k/";
     std::string model_data_path = "data/model_output/" + prob_name;
     std::string results_path = "results/" + prob_name;
     s_stopping_thresh = 1e-1;
