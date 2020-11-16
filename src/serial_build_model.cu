@@ -1,10 +1,7 @@
 #include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
 #include <thrust/copy.h>
 #include <thrust/unique.h>
 #include <thrust/count.h>
-#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include "cnpy.h"
 #include <cmath>
@@ -13,19 +10,12 @@
 #include <chrono>
 using namespace std::chrono;
 #include <iostream>
-// #include "get_funcs.h"
-// #include "extract_field.h"
-// #include "move_and_rewards.h"
-// #include "utils.h"
 
-
-long long int GPUmem = 8*1000*1000*1000LL; // using 1000 instead of 1024 
 long long int ncells;
 long long int NcNr;    
 long long int NcNa;    
 long long int NcNrNa;   
-int thrust_fraction = 1; //expected  memory use for thrust method calls in terms of fraction of master_arr size
-int avg_nnz_per_row = 10; // avg num  of nnz per row
+
 
 /*
 ------  Declarations of utility functions from utils.h -------
@@ -47,7 +37,6 @@ thrust::host_vector<long long int> &H_master_cooS1,
 
 
 // template<typename dType> template not working for thrust vectors
-void print_device_vector(thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method);
 void make_dir(std::string dir_name);
 void populate_ac_angles(float* ac_angles, int num_ac_angles);
 void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax);
@@ -55,72 +44,47 @@ void populate_actions(float** H_actions, int num_ac_speeds, int num_ac_angles, f
 
 
 
-
-/*
------ subsidiary device functions moved to get_funcs.h/cu -----
-*/
-
-__device__ int32_t get_thread_idx(){
-    // assigns idx to thread with which it accesses the flattened 3d vxrzns matrix
-    // for a given T and a given action. 
-    // runs for both 2d and 3d grid
-    // TODO: may have to change this considering cache locality
-    // here i, j, k refer to a general matrix M[i][j][k]
-    int32_t i = threadIdx.x;
-    int32_t j = blockIdx.y;
-    int32_t k = blockIdx.x;
-    int32_t idx = k + (j*gridDim.x)  + (i*gridDim.x*gridDim.y)+ blockIdx.z*blockDim.x*gridDim.x*gridDim.y;
-    return idx;
-}
-
-__device__ long long int state1D_from_spid(int32_t T, int32_t sp_id, long long int ncells){   
+long long int state1D_from_spid(int32_t T, int32_t sp_id, long long int ncells){   
     // j ~ blockIdx.x
     // i ~ blockIdx.y 
     // The above three consitute a spatial state index from i and j of grid
     // last term is for including time index as well.
 
-        // return value when full spatial grid was used
-        // return (blockIdx.x + (blockIdx.y*gridDim.x) + (T*gridDim.x*gridDim.y) ); 
-    
     // return value for chunks concept
     return sp_id + (T*ncells);
 }
 
 
-__device__ long long int state1D_from_ij(int32_t*  posid, int32_t T, int32_t gsize){
+long long int state1D_from_ij(int32_t*  posid, int32_t T, int32_t gsize){
     // posid = {i , j}
     // state id = j + i*dim(i) + T*dim(i)*dim(j)
-
-        // return value when full spatial grid was used
-        // return (posid[1] + posid[0]*gridDim.x + (T*gridDim.x*gridDim.y) ) ; 
 
     // return value for chunks concept
     return (posid[1] + posid[0]*gsize + (T*gsize*gsize)*1LL ) ; 
 
 }
 
+//TODO
+// int32_t get_rzn_id(){
+//     return (blockIdx.z * blockDim.x)  + threadIdx.x;
+// }
 
-__device__ int32_t get_rzn_id(){
-    return (blockIdx.z * blockDim.x)  + threadIdx.x;
-}
 
-__device__ void get_posids_from_sp_id(long long int sp_id, int gsize, int32_t* posids){
-
+void get_posids_from_sp_id(long long int sp_id, int gsize, int32_t* posids){
     posids[0] = sp_id/gsize;
     posids[1] = sp_id%gsize;
     return;
 }
 
-__device__ long long int get_sp_id(){
+
+long long int get_sp_id(int i , int j, int gsize){
     // sp_id: 1d spatial id ranging from 0 to ncells
-    int i = blockIdx.y;
-    int j = blockIdx.x;
-    long long int sp_id = j + (i*gridDim.x)*1LL;
+    long long int sp_id = j + (i*gsize)*1LL;
     return sp_id;
 }
 
 
-__device__ void get_posids_relS2_0(int32_t m, int32_t* posids_S1, int32_t* posids_relS2_0){
+void get_posids_relS2_0(int32_t m, int32_t* posids_S1, int32_t* posids_relS2_0){
     // m*m is size of neighbour grid
     // returns i,j index of upper left corner of neighbour grid
     int32_t i1 = posids_S1[0];
@@ -132,7 +96,7 @@ __device__ void get_posids_relS2_0(int32_t m, int32_t* posids_S1, int32_t* posid
 }
 
 
-__device__ long long int get_rel_sp_id2(int32_t m, int32_t* posids_S2, int32_t* posids_relS2_0){
+long long int get_rel_sp_id2(int32_t m, int32_t* posids_S2, int32_t* posids_relS2_0){
     // returns relative sp_id for S2 in neighbour grid
 
     int32_t del_i = posids_S2[0] - posids_relS2_0[0]; // i2 - rel_i0
@@ -151,7 +115,7 @@ __device__ long long int get_rel_sp_id2(int32_t m, int32_t* posids_S2, int32_t* 
 
 
 
-__device__ long long int get_sp_id2_from_rel_sp_id2(int32_t m, int32_t gsize, 
+long long int get_sp_id2_from_rel_sp_id2(int32_t m, int32_t gsize, 
                                     long long int rel_sp_id2, int32_t* posids_relS2_0){
     // returns Sp_id2 from rel_sp_id2
     long long int sp_id2;
@@ -168,9 +132,9 @@ __device__ long long int get_sp_id2_from_rel_sp_id2(int32_t m, int32_t gsize,
 
 
 
-__device__ bool is_edge_state(int32_t i, int32_t j){
+bool is_edge_state(int32_t i, int32_t j, int gsize){
     // n = gsize -1 that is the last index of the domain assuming square domain
-    int32_t n = gridDim.x - 1;
+    int32_t n = gsize - 1;
     if (i == 0 || i == n || j == 0 || j == n ) 
         return true;
     else 
@@ -178,7 +142,7 @@ __device__ bool is_edge_state(int32_t i, int32_t j){
 }
 
 
-__device__ bool is_in_obstacle(int sp_id, int T, long long int ncells, int* all_mask_mat){
+bool is_in_obstacle(int sp_id, int T, long long int ncells, int* all_mask_mat){
     //returns true if obstacle is present in state T,i,j
 
     long long int mean_id = state1D_from_spid(T, sp_id, ncells);
@@ -187,7 +151,7 @@ __device__ bool is_in_obstacle(int sp_id, int T, long long int ncells, int* all_
 }
 
 
-__device__ bool is_terminal(int32_t i, int32_t j, float* params){
+bool is_terminal(int32_t i, int32_t j, float* params){
     // terminal state indices (of UL corner of terminal subgrid if term_subgrid_size>1)
     int32_t i_term = params[8];         
     int32_t j_term = params[9];
@@ -199,13 +163,13 @@ __device__ bool is_terminal(int32_t i, int32_t j, float* params){
 }
 
 
-__device__ bool my_isnan(int s){
+bool my_isnan(int s){
     // By IEEE 754 rule, NaN is not equal to NaN
     return s != s;
 }
 
 
-__device__ void get_xypos_from_ij(int32_t i, int32_t j, int32_t gsize ,float* xs, float* ys, float* x, float* y){
+void get_xypos_from_ij(int32_t i, int32_t j, int32_t gsize ,float* xs, float* ys, float* x, float* y){
     *x = xs[j];
         // *y = ys[gridDim.x - 1 - i];
     *y = ys[gsize - 1 - i];
@@ -214,13 +178,13 @@ __device__ void get_xypos_from_ij(int32_t i, int32_t j, int32_t gsize ,float* xs
 }
 
 
-__device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
+long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
     // gives sp_id from posids (i,j)
-    return posids[1] + gsize*posids[0]*1LL ;
+    return posids[1] + (gsize*posids[0]*1LL) ;
 }
 
 
-__device__ float get_angle_in_0_2pi(float theta){
+float get_angle_in_0_2pi(float theta){
     float f_pi = 3.141592;
     if (theta < 0)
         return theta + (2*f_pi);
@@ -229,15 +193,7 @@ __device__ float get_angle_in_0_2pi(float theta){
 }
 
 
-
-
-
-
-/*
------ move() and reward_functions() moverd to move_and_rewards.h/cu-----
-*/
-
-__device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float rad1, float rad2, float* params){
+float calculate_one_step_reward(float ac_speed, float ac_angle, float rad1, float rad2, float* params){
 
     int method = params[13];
     float Cr = 1;       // coeffecient for radaition term
@@ -262,7 +218,7 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
 }
 
 
-__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
+void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
     int32_t gsize = params[0];
     int32_t n = params[0] - 1;      // gsize - 1
     // int32_t num_actions = params[1];
@@ -287,18 +243,6 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     // float r_step = 0;
     *r = 0;         // intiilaise r with 0
 
-
-    //checks TODO: remove checks once verified
-    // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-    // {
-    //     params[14] = x;
-    //     params[15] = y;
-    //     params[16] = vnetx;
-    //     params[17] = vnety;
-    //     params[18] = xnew;
-    //     params[19] = ynew;
-    //     params[20] = ac_angle;
-    // }
     if (xnew > xs[n])
         {
             xnew = xs[n];
@@ -345,48 +289,33 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             // update posids
             posids[0] = yind;
             posids[1] = xind;
-            if (is_edge_state(posids[0], posids[1]))  //line 110
+            if (is_edge_state(posids[0], posids[1], gsize))  //line 110
                 {
                     *r += r_outbound;
                 }
             
-            if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-            {
-                // params[26] = 9999;
-            }
         }
 
     // r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
     // // r_step = -dt;
     // *r += r_step; //TODO: numerical check remaining
-    if (is_terminal(posids[0], posids[1], params))
-        {
+    if (is_terminal(posids[0], posids[1], params)){
             *r += r_terminal;
-        }
+    }
     else{
             //reaching any state in the last timestep which is not terminal is penalised
             if (T == nt-2)
                 *r += r_outbound; 
-        }
-
-
     }
 
+    return;
+}
 
 
 
-
-
-
-/*
-__device__ void extract_velocity() moved to extract_field.h/cu
-*/
-
-__device__ void extract_velocity(int32_t* posids, long long int sp_id, long long int ncells, float* vx, float* vy,
+void extract_velocity(int32_t rzn_id, int32_t* posids, long long int sp_id, long long int ncells, float* vx, float* vy,
     int32_t T, float* all_u_mat, float* all_v_mat, float* all_ui_mat, 
     float* all_vi_mat, float* all_Yi, float* params){
-
-
 
     int32_t nrzns = params[2];
     int32_t nmodes = params[7];    
@@ -397,15 +326,12 @@ __device__ void extract_velocity(int32_t* posids, long long int sp_id, long long
     float sum_x = 0;
     float sum_y = 0;
     float vx_mean, vy_mean;
-    //thread index. also used to access resultant vxrzns[nrzns, gsize, gsize]
-    int32_t idx = get_thread_idx();
-    //rzn index to identify which of the 5k rzn it is. used to access all_Yi.
-    int32_t rzn_id = get_rzn_id() ;
+    //rzn_id: rzn index to identify which of the 5k rzn it is. used to access all_Yi.
+
     //mean_id is the index used to access the flattened all_u_mat[t,i,j].
     long long int mean_id = state1D_from_spid(T, sp_id, ncells);
     //to access all_ui_mat and all_vi_mat
-    //str_uvi = gridDim.x * gridDim.y;
-    // sp_uvi = (T * nmodes * str_uvi) + (gridDim.x * blockIdx.y) + (blockIdx.x);
+
     str_uvi = gsize*gsize*1LL;
     sp_uvi = (T * nmodes * str_uvi) + (gsize * posids[0]) + (posids[1]);
 
@@ -429,7 +355,7 @@ __device__ void extract_velocity(int32_t* posids, long long int sp_id, long long
 }
 
 
-__device__ void extract_radiation(long long int sp_id, int32_t T, long long int ncells, 
+void extract_radiation(long long int sp_id, int32_t T, long long int ncells, 
                                 float* all_s_mat, float* rad){
     // for DETERMINISTIC radiation (scalar) field
     // extract radiation (scalar) from scalar matrix 
@@ -441,9 +367,8 @@ __device__ void extract_radiation(long long int sp_id, int32_t T, long long int 
 }
 
 
-__device__ bool is_within_band(int i, int j, int i1, int j1, int i2, int j2, float* xs, float* ys, int gsize){
+bool is_within_band(int i, int j, int i1, int j1, int i2, int j2, float* xs, float* ys, int gsize){
     //returns true if i,j are within the band connecticng cells i1,j1 and i2,j2
-
     if(i1==i2 || j1==j2){
         return true;
     }
@@ -466,12 +391,12 @@ __device__ bool is_within_band(int i, int j, int i1, int j1, int i2, int j2, flo
 }
 
 
-__device__ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2, int T, 
+bool goes_through_obstacle(long long int sp_id1, long long int sp_id2, int T, 
                                         long long int ncells, int* D_all_mask_mat, 
                                         float* xs, float* ys, float* params){
 
     // returns true if the transition involves going through obstacle
-
+    // std::cout<< "inside func goes_through_obstacle\n";
     bool possible_collision = false;
     int posid1[2];
     int posid2[2];
@@ -504,161 +429,173 @@ __device__ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2
 
 
 
-//test: changer from float* to float ac_angle
-__global__ void transition_calc(float* T_arr, long long int ncells, 
+//TODO
+    // transition_calc(D_T_arr, 
+    //     ncells, all_u_arr, all_v_arr, all_ui_arr, all_vi_arr, all_yi_arr,
+    //     all_s_arr, all_mask_arr,
+    //     ac_speed, ac_angle, xs, ys, params, H_master_sumRsa_arr, 
+    //     H_master_S2_arr);
+void transition_calc(float* T_arr, long long int ncells, 
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
                             float* D_all_s_mat, int* D_all_mask_mat,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
                             float* results){
                             // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
+    
+    
+    
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
     int32_t nrzns = params[2]; 
     float r_outbound = params[5];        
     // int32_t is_stationary = params[11];
     int32_t T = (int32_t)T_arr[0];      // current timestep
-    int32_t idx = get_thread_idx();
+    int32_t idx;
     long long int res_idx;
     float vx, vy, rad1, rad2;
-    long long int sp_id = get_sp_id();      //sp_id is space_id. S1%(gsize*gsize)
+    int32_t rzn_id;
+    long long int sp_id;      //sp_id is space_id. S1%(gsize*gsize)
     long long int sp_id2;
     long long int rel_sp_id2;
     int32_t posids_relS2_0[2];
-    int32_t posids_S1[2];
+    int32_t posids_S1[2];   //doesn't get updated
+    int32_t posids[2];  //get usdated  //static declaration of array of size 2 to hold i and j values of S1. 
     int32_t m = (int32_t) params[18];
     int32_t Nb = (m*m) + 1;
     float one = 1.0;
     
-    if(idx < gridDim.x*gridDim.y*nrzns && sp_id < ncells) //or idx < arr_size
-    {
-        // int32_t posids[2] = {(int32_t)blockIdx.y, (int32_t)blockIdx.x};    //static declaration of array of size 2 to hold i and j values of S1. 
-        int32_t posids[2];    //static declaration of array of size 2 to hold i and j values of S1. 
-        get_posids_from_sp_id(sp_id, gsize, posids);
-        get_posids_from_sp_id(sp_id, gsize, posids_S1);
-        int32_t rzn_id = get_rzn_id();
-        // if(idx == 0){
-        //     params[23] = posids[0];
-        //     params[24] = posids[1];
-        // }
-        // if(idx == 500){
-        //     params[25] = posids[0];
-        //     params[26] = posids[1];
-        // }
-            
-        //  Afer move() these will be overwritten by i and j values of S2
-        float r=0;              // to store immediate reward
-        float r_step;
+    for(int i=0; i<gsize; i++){
 
-        
-        extract_velocity(posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
-        extract_radiation(sp_id, T, ncells, D_all_s_mat, &rad1);
-        
-        // if s1 not terminal
-        if (is_terminal(posids[0], posids[1], params) == false){
-            // if s1 not in obstacle
-            if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
+        for(int j=0; j<gsize; j++){
 
-                // moves agent and adds r_outbound and r_terminal to r
-                move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
-                sp_id2 = get_sp_id_from_posid(posids, gsize);
-                extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+            for(int k=0; k<nrzns; k++){
+                // std::cout << "i,j,k" << i << ", " << j << ", " << k << "\n";
+                // idx = get_thread_idx();
+                sp_id = get_sp_id(i,j,gsize);      //sp_id is space_id. S1%(gsize*gsize)
+
+                // std::cout<< "get posids from spid\n";
+                get_posids_from_sp_id(sp_id, gsize, posids);
+                get_posids_from_sp_id(sp_id, gsize, posids_S1);
+                rzn_id = k;
                 
-                // adds one step-reward based on method. mehthod is available in params
-                r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
-                r += r_step;
+                //  Afer move() these will be overwritten by i and j values of S2
+                float r=0;              // to store immediate reward
+                float r_step;
 
-                // if S2 is an obstacle cell. then penalise with r_outbound
-                // if (is_in_obstacle(sp_id2, T+1, ncells, D_all_mask_mat) == true )
-                //     r = r_outbound;
-                if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true)
-                    r = r_outbound;
+                // std::cout<< "extract velocity and radiation\n";
+                
+                extract_velocity(rzn_id, posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
+                extract_radiation(sp_id, T, ncells, D_all_s_mat, &rad1);
+                // std::cout<< "check for obstacles\n";
+
+                // if s1 not terminal
+                if (is_terminal(posids[0], posids[1], params) == false){
+                    // if s1 not in obstacle
+                    if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
+
+                        // moves agent and adds r_outbound and r_terminal to r
+                        move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+                        sp_id2 = get_sp_id_from_posid(posids, gsize);
+                        // extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+                        rad2=0;
+
+                        // adds one step-reward based on method. mehthod is available in params
+                        r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
+                        r += r_step;
+
+                        // if S2 is an obstacle cell. then penalise with r_outbound
+                        // if (is_in_obstacle(sp_id2, T+1, ncells, D_all_mask_mat) == true )
+                        //     r = r_outbound;
+                        if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true)
+                            r = r_outbound;
+                    }
+                    // if s1 is in obstacle, then no update to posid
+                    else
+                        r = r_outbound;
+                }
+                // std::cout<< "get_posids_relS2_0\n";
+
+                get_posids_relS2_0(m, posids_S1, posids_relS2_0);
+                rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
+                res_idx = sp_id*Nb + rel_sp_id2;
+                results[res_idx] += 1;
+                //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
+                sumR_sa[sp_id]+=r;
+                // float a = atomicAdd(&sumR_sa[sp_id], r); 
+
             }
-            // if s1 is in obstacle, then no update to posid
-            else
-                r = r_outbound;
         }
-  
-        get_posids_relS2_0(m, posids_S1, posids_relS2_0);
-        rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
-        res_idx = sp_id*Nb + rel_sp_id2;
-        float b = atomicAdd(&results[res_idx], one);
+    }
 
-        //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
-        float a = atomicAdd(&sumR_sa[sp_id], r); 
-
-        __syncthreads();
-        // if (threadIdx.x == 0 && blockIdx.z == 0)
-        //     sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
-
-    }//if ends
     return;
 }
 
 
-
-__global__ void compute_mean(float* D_master_sumRsa_arr, int size, int nrzns) {
+//TODO
+void compute_mean(float* D_master_sumRsa_arr, int size, int nrzns) {
     // computes mean
-    int tid = (blockIdx.x*blockDim.x) + threadIdx.x;
-    if (tid < size)
-        D_master_sumRsa_arr[tid] =  D_master_sumRsa_arr[tid]/nrzns;
-
-    return;
-}
-
-
-
-__global__ void count_kernel(float* D_master_S2_arr_ip, int nrzns, unsigned long long int* num_uq_s2_ptr) {
-    // D_master_S2_arr_ip contains count of relS2s for S1s for a given action
-    // This kernel counts no. of nnz elements for a given S1
-    // This is needed for getting total nnz to initiliase COO matrix
-    // ncells is gridDim,  i.e. we have ncells blocks in grid
-    // Nb is blockDim, i.e we have Nb threads in block
-    
-    int ncells = gridDim.x;  // == ncells == ncells
-    int Nb = blockDim.x;
-    long long int tid = (blockIdx.x*Nb) + threadIdx.x;
-    int idx = blockIdx.x;
-    float nnz;
-    unsigned long long int one = 1.0;
-
-    if ((tid < ncells*Nb) && (threadIdx.x != Nb-1)){  // tid < Nb*ncells
-        if (D_master_S2_arr_ip[tid] != 0){
-            nnz = atomicAdd(&num_uq_s2_ptr[idx], one);
-        }
+    for(int i=0; i<size; i++){
+        D_master_sumRsa_arr[i] =  D_master_sumRsa_arr[i]/nrzns;
     }
     return;
 }
 
 
-__global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
+//TODO
+void count_kernel(float* D_master_S2_arr_ip,long long int ncells, int Nb, int nrzns, unsigned long long int* num_uq_s2_ptr) {
+    // D_master_S2_arr_ip contains count of relS2s for S1s for a given action
+    // This kernel counts no. of nnz elements for a given S1
+    // This is needed for getting total nnz to initiliase COO matrix
+    // ncells is gridDim,  i.e. we have ncells blocks in grid
+    // Nb is blockDim, i.e we have Nb threads in block
+    int idx;
+    for(int i=0; i<ncells; i++){
+        int count = 0;
+        for(int j=0; j<Nb-1; j++){
+            idx = Nb*i + j;
+            if (D_master_S2_arr_ip[idx]!=0){
+                count += 1;
+            }
+        num_uq_s2_ptr[i] = count;
+
+        }
+    }
+
+    return;
+}
+
+//TODO
+void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
                             long long int ncells, int nrzns, int gsize, 
                             long long int* D_coo_s1_arr, long long int* D_coo_s2_arr, 
                             float* D_coo_cnt_arr, unsigned long long int* num_uq_s2_ptr, unsigned long long int* prSum_num_uq_s2_ptr){
 
-    long long int tid = (blockIdx.x*blockDim.x) + threadIdx.x;
-    long long int start_idx = tid*Nb; // to access tid'th threads 0-pos in ip_arr
+    // long long int tid = (blockIdx.x*blockDim.x) + threadIdx.x;
+    long long int start_idx; // to access tid'th threads 0-pos in ip_arr
 
-    long long int n_uqs = num_uq_s2_ptr[tid]; //number of unique S2s for tid'th block
-    long long int op_st_id = prSum_num_uq_s2_ptr[tid];   //sum of number of uniqeu S2s uptil tid'th block. to access tid'th thread's 0-pos in op_arr
+    long long int n_uqs; //number of unique S2s for tid'th block
+    long long int op_st_id ;   //sum of number of uniqeu S2s uptil tid'th block. to access tid'th thread's 0-pos in op_arr
 
-    long long int ith_nuq = 0; //ranges from 0 to n_uqs , to index number between 0 and n_uqs
-
+    long long int ith_nuq; //ranges from 0 to n_uqs , to index number between 0 and n_uqs
+    long long int s1;
     long long int rel_sp_id2;
     long long int sp_id2;
     long long int S2;
-    long long int sp_id1 = tid;
+    long long int sp_id1;
     float count; //first if eval will lead to else condition and do  count++ 
     int32_t posids_relS2_0[2];
     int32_t posids_S1[2];
 
 
-    if (tid < ncells){
-
-        // int32_t s1 = (tid%ncells) + (t*ncells); // TODO:xxdone change this to nbe a function of a arguments: sp_id and t
-        long long int s1 = tid + (t*ncells);
+    for(int k=0; k<ncells; k++){
+        ith_nuq = 0; //ranges from 0 to n_uqs , to index number between 0 and n_uqs
+        start_idx = k*Nb; // to access tid'th threads 0-pos in ip_arr
+        n_uqs = num_uq_s2_ptr[k]; //number of unique S2s for tid'th block or the kth cell
+        op_st_id = prSum_num_uq_s2_ptr[k];
+        sp_id1 = k;
+        s1 = k + (t*ncells);
         for(long long int i = 0; i< n_uqs; i++)
             D_coo_s1_arr[op_st_id + i] = s1;
         
-        get_posids_relS2_0(m, posids_S1, posids_relS2_0);
         for(long long int i = 0; i< Nb-1; i++){
             count = D_master_S2_arr_ip[start_idx + i];
             if (count != 0){
@@ -667,19 +604,14 @@ __global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
                 get_posids_relS2_0(m, posids_S1, posids_relS2_0);
                 sp_id2 = get_sp_id2_from_rel_sp_id2(m, gsize, 
                     rel_sp_id2, posids_relS2_0);
-                S2 = state1D_from_spid(t+1, sp_id2, ncells);
+                S2 = state1D_from_spid(t, sp_id2, ncells);
                 D_coo_s2_arr[op_st_id + ith_nuq] = S2;         // store old_s2 value in the [.. + ith] position
                 D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
                 ith_nuq++;                                      // increment i
             }
         }
-        // // to store information about the last of n_uqs S2s
-        // if (ith_nuq < n_uqs ){   //this condition should always be true because i assert ith_nuq == n_uqs - 1
-        //     D_coo_s2_arr[op_st_id + ith_nuq] = old_s2;         // store old_s2 value in the [.. + ith] position
-        //     D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
-        //     ith_nuq++;                                      // increment i
-        // }
-   }
+    }
+
    return;
 }
 
@@ -692,11 +624,6 @@ void print_array(dType* array, int num_elems,std::string array_name, std::string
     std::cout << std::endl;
 }
 
-
-/*
---- print_device_vector() moved to utils.h/cu ---
-IMP: datatype has to be explicityle changed in that file
-*/
 
 std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int j_term,
                             int tsg_size){
@@ -714,12 +641,20 @@ std::string get_prob_name(int num_ac_speeds, int num_ac_angles, int i_term, int 
     return name;
 }
 
-void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, thrust::device_vector<float> &D_tdummy, 
-                                float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
-                                float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                float* D_all_s_arr, int* D_all_mask_arr,
-                                thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                thrust::device_vector<float> &D_ys, 
+
+
+
+
+
+
+
+
+void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, thrust::host_vector<float> &H_tdummy, 
+                                float* all_u_arr, float* all_v_arr, float* all_ui_arr,
+                                float* all_vi_arr, float*  all_yi_arr,
+                                float* all_s_arr, int* all_mask_arr,
+                                thrust::host_vector<float> &H_params, thrust::host_vector<float> &H_xs, 
+                                thrust::host_vector<float> &H_ys, 
                                 float** H_actions,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                 thrust::host_vector<long long int>* H_Aarr_of_cooS1,
@@ -728,12 +663,12 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 thrust::host_vector<float>* H_Aarr_of_Rs
                                 );
 
-void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, thrust::device_vector<float> &D_tdummy, 
-                                float* D_all_u_arr, float* D_all_v_arr, float* D_all_ui_arr,
-                                float*  D_all_vi_arr, float*  D_all_yi_arr,
-                                float* D_all_s_arr, int* D_all_mask_arr,
-                                thrust::device_vector<float> &D_params, thrust::device_vector<float> &D_xs, 
-                                thrust::device_vector<float> &D_ys, 
+void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, thrust::host_vector<float> &H_tdummy, 
+                                float* all_u_arr, float* all_v_arr, float* all_ui_arr,
+                                float* all_vi_arr, float*  all_yi_arr,
+                                float* all_s_arr, int* all_mask_arr,
+                                thrust::host_vector<float> &H_params, thrust::host_vector<float> &H_xs, 
+                                thrust::host_vector<float> &H_ys, 
                                 float** H_actions,
                                 thrust::host_vector<int32_t> &H_coo_len_per_ac,
                                 thrust::host_vector<long long int>* H_Aarr_of_cooS1,
@@ -742,192 +677,86 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 thrust::host_vector<float>* H_Aarr_of_Rs
                                 ){
 
-    /***** 
-        TODO:
-        read from H_params and not from D_params
-        *****/
-    int gsize = (int) D_params[0];
-    int num_actions =  (int)D_params[1];
-    int nrzns = (int) D_params[2];
-    int nt = (int) D_params[10];
-    int m = (int)D_params[18];
+ 
+    int gsize = (int) H_params[0];
+    int num_actions =  (int)H_params[1];
+    int nrzns = (int) H_params[2];
+    int nt = (int) H_params[10];
+    int m = (int)H_params[18];
     int Nb = (m*m) + 1; //+1 is to store no. of S2s not lying in nieghbour_array. Ideally it should have 0
 
-        // check velocity data and vector data
-        // std::cout << "D_paramas: " << std::endl;
-        // for (int i = 0; i< 10; i ++)
-        //     std::cout << D_params[i] << std::endl;
-
-        // I think doing it this way does not issue a memcpy at the backend. thats why it fails
-        // std::cout << "D_all_u_arr" << std::endl;
-        // for (int i = 0; i< 10; i ++)
-        //     std::cout << D_all_u_arr[i] << std::endl;                                 
-
-    // raw pointer casts
-    float* D_T_arr = thrust::raw_pointer_cast(&D_tdummy[0]);
-    float* xs = thrust::raw_pointer_cast(&D_xs[0]);
-    float* ys = thrust::raw_pointer_cast(&D_ys[0]);
-    float* params = thrust::raw_pointer_cast(&D_params[0]);
-
-    // print_array<float>(xs, 2, "xs", "");
-
-    // std::cout << "D_xs= " << std::endl;
-    // for (int i = 0; i< 10; i++)
-    //     std::cout << D_xs[i] << " " ;
-
-    
-    //Define Kernel launch parameters for transition calculation kernel
-    int DimGrid_z = (nrzns/bDimx)+1;
-    if (nrzns % bDimx == 0)
-        DimGrid_z = (nrzns/bDimx);
-
+    float* H_T_arr = thrust::raw_pointer_cast(&H_tdummy[0]);
+    float* xs = thrust::raw_pointer_cast(&H_xs[0]);
+    float* ys = thrust::raw_pointer_cast(&H_ys[0]);
+    float* params = thrust::raw_pointer_cast(&H_params[0]);
+        
     // checks
     // if (t == nt-2){
-    //     std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
-    //     std::cout<<"gisze= " << gsize << std::endl;
-    //     std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
-    //     std::cout<<"bDimx = " <<  bDimx << std::endl;
+        // std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
+        // std::cout<<"gisze= " << gsize << std::endl;
     // }
  
-
     // initialse master S2 array
-    thrust::device_vector<float> D_master_S2_vector(ncells * Nb, 0);
-    float* D_master_S2_arr = thrust::raw_pointer_cast(&D_master_S2_vector[0]);
-    
+    long long int NcNb =  ncells*Nb;
+    thrust::host_vector<float> H_master_S2_vector(NcNb, 0);
+    float* H_master_S2_arr = thrust::raw_pointer_cast(&H_master_S2_vector[0]);
+
     // initialise master sum_Rsa array - sumRsa's 
     // Important to initialise it with 0
     // need to intiilase with 0 at for each chunknum
-    thrust::device_vector<float> D_master_sumRsa_vector(ncells, 0);
-    float* D_master_sumRsa_arr = thrust::raw_pointer_cast(&D_master_sumRsa_vector[0]);
-    // thrust::fill(D_master_S2_vector.begin(), D_master_S2_vector.end(), 0);
-    // thrust::fill(D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end(), 0);
-
-    // define kerel block and grid configuration
-    dim3 DimGrid(gsize, gsize, DimGrid_z);
-    dim3 DimBlock(bDimx, 1, 1);
+    thrust::host_vector<float> H_master_sumRsa_vector(ncells, 0);
+    float* H_master_sumRsa_arr = thrust::raw_pointer_cast(&H_master_sumRsa_vector[0]);
 
     float ac_speed = H_actions[action_id][0];
     float ac_angle = H_actions[action_id][1];
-    /***** 
-        TODO:
-        check fill operation
-        *****/
- 
+    // std::cout << "starting transition calc\n";
     // launch kernel for @a @t
-    transition_calc<<< DimGrid, DimBlock >>> (D_T_arr, 
-        ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-        D_all_s_arr, D_all_mask_arr,
-        ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr, 
-        D_master_S2_arr);
+    transition_calc(H_T_arr, 
+        ncells, all_u_arr, all_v_arr, all_ui_arr, all_vi_arr, all_yi_arr,
+        all_s_arr, all_mask_arr,
+        ac_speed, ac_angle, xs, ys, params, H_master_sumRsa_arr, 
+        H_master_S2_arr);
 
-    cudaDeviceSynchronize();
+    // std::cout << "starting compute mean---  ncells ="<< ncells<< "\n";
+    compute_mean(H_master_sumRsa_arr, ncells, nrzns);
 
-    // // CHECK copy data back to host for check
-    // std::cout << "a" << n <<"\n vx at s1=0: " << D_params[31] << std::endl;
-    // std::cout <<"\n vx at s1=0: " << D_params[30] << std::endl;
-    // std::cout << "----a" << n <<"\n";
-    // std::cout <<"pre move " << "\n";
-    // std::cout<<"r1\n"<< D_params[23] << "," << D_params[24] << std::endl;
-    // std::cout<<"r2\n"<< D_params[25] << "," << D_params[26] << std::endl;
-    // std::cout <<"post move " << "\n";
-    // std::cout<<"r1\n"<< D_params[27] << "," << D_params[28] << std::endl;
-    // std::cout<<"r2\n"<< D_params[29] << "," << D_params[30] << std::endl;
-
-    // thrust::copy(D_master_S2_vector.begin() + n*arr_size, D_master_S2_vector.begin() + (n+1)*arr_size, H_S2_vec.begin());
-    // thrust::copy(D_master_sumRsa_vector.begin() + n*ncells, D_master_sumRsa_vector.begin() + (n+1)*ncells, H_sumR_sa.begin());
-    // std::cout << "post kernel" << std::endl;
-    // for(int i = 0; i < 10; i ++)
-    //     std::cout << H_sumR_sa[i] << std::endl;
-    // for(int i = 0; i < 10; i ++)
-    //     std::cout << H_S2_vec[i] << std::endl;
-    
-
-    int Nthreads = D_master_sumRsa_vector.size();
-    assert(Nthreads == ncells);
-
-    int threads_per_block = 1024;
-    int blocks_per_grid = (Nthreads/threads_per_block) + 1;
-    assert( blocks_per_grid * threads_per_block >= Nthreads);
-    
-    compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
-
-    // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
-    cudaDeviceSynchronize();
     //initialising vectors for counting nnzs or number of uniqe S2s for S1s
-    thrust::device_vector<unsigned long long int> D_num_uq_s2(ncells,0);
-    thrust::device_vector<unsigned long long int> D_prSum_num_uq_s2(ncells);
-    unsigned long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2[0]);
-    unsigned long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2[0]);
-    //one thread per element
+    thrust::host_vector<unsigned long long int> H_num_uq_s2(ncells,0);
+    thrust::host_vector<unsigned long long int> H_prSum_num_uq_s2(ncells);
+    unsigned long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&H_num_uq_s2[0]);
+    unsigned long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&H_prSum_num_uq_s2[0]);
     // count no. of ug unique S2 for each S1 and fill in num_uq_s2
-    count_kernel<<<ncells, Nb>>>(D_master_S2_arr, nrzns, num_uq_s2_ptr);
-    cudaDeviceSynchronize();
-
-        //CHECKs
-        // std::cout << "D_num_uq_s2_pc\n";
-        // int tempflag = 0;
-        // int tempnum;
-        // int cnt2 = 0;
-        // int cnt1 = 0;
-        // for (int i =0; i < efCszNa; i++){
-        //     tempnum = D_num_uq_s2_pc[i];
-        //     if (tempnum == 1)
-        //         cnt1++;
-        //     else if (tempnum == 2)
-        //         cnt2++;
-        //     else
-        //         std::cout << " --------------------------- WRONG-----------\n";
-        // }
-        // std::cout << "cnt1 = " << cnt1 << "\ncnt2 = " << cnt2 <<"\n";
-
+    // std::cout << "starting count kernel-- nrzns ="<< nrzns<< "\n";
+    count_kernel(H_master_S2_arr, ncells, Nb, nrzns, num_uq_s2_ptr);
 
     // calc nnz: number of non zero elements(or unique S2s) for a given S1 and action
-    long long int nnz = thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
+    long long int nnz = thrust::reduce(H_num_uq_s2.begin(), H_num_uq_s2.end(), (float) 0, thrust::plus<float>());
     // get prefix sum of D_num_uq_s2. This helps threads to access apt COO indices in reduce_kernel
-    thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
+    thrust::exclusive_scan(H_num_uq_s2.begin(), H_num_uq_s2.end(), H_prSum_num_uq_s2.begin());
     // std::cout << "nnz = " << nnz<< "\n";
 
     //initilise coo arrays (concated across actions)
-    thrust::device_vector<long long int> D_coo_s1(nnz);
-    thrust::device_vector<long long int> D_coo_s2(nnz);
-    thrust::device_vector<float> D_coo_count(nnz); // TODO: makde this int32_t and introduce another array for prob
-    long long int* D_coo_s1_arr = thrust::raw_pointer_cast(&D_coo_s1[0]);
-    long long int* D_coo_s2_arr = thrust::raw_pointer_cast(&D_coo_s2[0]);
-    float* D_coo_cnt_arr = thrust::raw_pointer_cast(&D_coo_count[0]);
+    thrust::host_vector<long long int> H_coo_s1(nnz);
+    thrust::host_vector<long long int> H_coo_s2(nnz);
+    thrust::host_vector<float> H_coo_count(nnz); // TODO: makde this int32_t and introduce another array for prob
+    long long int* H_coo_s1_arr = thrust::raw_pointer_cast(&H_coo_s1[0]);
+    long long int* H_coo_s2_arr = thrust::raw_pointer_cast(&H_coo_s2[0]);
+    float* H_coo_cnt_arr = thrust::raw_pointer_cast(&H_coo_count[0]);
 
-    Nthreads = ncells;
-    assert(Nthreads == ncells);
-    threads_per_block = 1024;
-    blocks_per_grid = (Nthreads/threads_per_block) + 1;
-    // reduce operation to fill COO arrays
-    reduce_kernel<<<blocks_per_grid, threads_per_block>>>(D_master_S2_arr, t, Nb, m,
-                                ncells, nrzns, gsize, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, 
-                                num_uq_s2_ptr, prSum_num_uq_s2_ptr);
-    cudaDeviceSynchronize();
 
-        //Checks
-        // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
-        // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
-
-        // //reduce D_num_uq_s2_pc in chunks of actions - to find nnz or len_coo_arr for each action
-        // for (int n = 0; n < num_actions; n++){
-        //         // H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*ncells, D_num_uq_s2_pc.begin() +  (n+1)*ncells, (float) 0, thrust::plus<float>());
-        //     H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*eff_chunk_size, D_num_uq_s2_pc.begin() + (n+1)*eff_chunk_size, (float) 0, thrust::plus<float>());
-        // }
-        // thrust::inclusive_scan(H_coo_len_per_ac.begin(), H_coo_len_per_ac.end(), H_coo_len_per_ac.begin());
-        
- 
-
+    reduce_kernel(H_master_S2_arr, t, Nb, m,
+                    ncells, nrzns, gsize, H_coo_s1_arr, H_coo_s2_arr, H_coo_cnt_arr, 
+                    num_uq_s2_ptr, prSum_num_uq_s2_ptr);
 
     // in algo2, this function is for one action, and I already know nnz.
     // nnz should be filled in a global array 
     H_coo_len_per_ac[action_id] = nnz;
     // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
     assert(action_id >=0);
-    H_Aarr_of_cooS1[action_id].insert(H_Aarr_of_cooS1[action_id].end(), D_coo_s1.begin(), D_coo_s1.end());
-    H_Aarr_of_cooS2[action_id].insert(H_Aarr_of_cooS2[action_id].end(), D_coo_s2.begin(), D_coo_s2.end());
-    H_Aarr_of_cooProb[action_id].insert(H_Aarr_of_cooProb[action_id].end(), D_coo_count.begin(), D_coo_count.end());
-    H_Aarr_of_Rs[action_id].insert(H_Aarr_of_Rs[action_id].end(), D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end());
+    H_Aarr_of_cooS1[action_id].insert(H_Aarr_of_cooS1[action_id].end(), H_coo_s1.begin(), H_coo_s1.end());
+    H_Aarr_of_cooS2[action_id].insert(H_Aarr_of_cooS2[action_id].end(), H_coo_s2.begin(), H_coo_s2.end());
+    H_Aarr_of_cooProb[action_id].insert(H_Aarr_of_cooProb[action_id].end(), H_coo_count.begin(), H_coo_count.end());
+    H_Aarr_of_Rs[action_id].insert(H_Aarr_of_Rs[action_id].end(), H_master_sumRsa_vector.begin(), H_master_sumRsa_vector.end());
 
         //checks
         // std::cout << "H_coo_len_per_ac" << std::endl;
@@ -959,52 +788,6 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
 }
 
 
-
-
-
-void get_cell_chunk_partition(int gsize, int nrzns, int num_actions,
-                int nmodes, int nt, int thrust_fraction, int avg_nnz_per_row,
-                int* nchunks, long long int* chunk_size, long long int* last_chunk_size){
-    // reads dimensions of input data related to the problem and returns sizes
-    // and number of chunks into which ncells (spatial grid) is divided.
-    // So as to be able to fit all necesarry data structures in GPU memory
-
-    // long long int max_s_val = ncells*nt*num_actions*1LL;
-    long long int master_arr_size_term ;
-    // if (mas_s_val < 2147483647) //TODO: dynamic datatype allocation int vs long long int based on 
-                                    // max_s_value possible in master_s2_array
-    master_arr_size_term = 16*nrzns*num_actions; // 2 long long int arrays
-    long long int vdata_size_term = 8*nt*(nmodes+1);
-    long long int coo_term = 8*3*avg_nnz_per_row*num_actions;
-    int k = thrust_fraction;
-    long long int denom = ((1+k)*master_arr_size_term) + vdata_size_term + coo_term;
-
-    std::cout << "master_arr_size_term= " << master_arr_size_term << "\n" 
-        << "vdata_size_term = " <<vdata_size_term << "\n"
-        << "denom = " << denom << "\n" ;
-
-    int local_chunk_size = (int) (GPUmem/denom);
-    if (local_chunk_size < ncells){
-        std::cout << "----Partition case 1:\n";
-        *chunk_size = local_chunk_size;
-        *nchunks = (ncells/local_chunk_size) + 1;
-        *last_chunk_size = ncells - ( (local_chunk_size)*(*nchunks - 1) );
-    }
-    else{
-        std::cout << "----Partition case 2:\n";
-        *chunk_size = ncells/2;
-        *last_chunk_size = ncells/2;
-        *nchunks = 2;
-    }
-    std::cout << "ncells = " << ncells << "\n";
-    std::cout << "local_chunk_size = " << local_chunk_size << "\n";
-    std::cout << "nchunks = " << *nchunks << "\n" 
-    << "chunk_size = " << *chunk_size << "\n" 
-    << "last_chunk_size = " << *last_chunk_size << "\n";
-
-return;
-}
-       
 int get_reward_type(std::string prob_type){
     // returns 
     // 0 for time
@@ -1025,53 +808,12 @@ int get_reward_type(std::string prob_type){
 }
 
 
-
 int main(){
 
 // -------------------- input data starts here ---------------------------------
 
-    //  // DG3 data
-    // // TODO: take parameters form different file
-    // std::string op_FnamePfx = "data/output/test_DG_nt60/"; //path for storing op npy data.
-
-    // float nt = 60;
-    // float is_stationary = 0;
-    // float gsize = 100;
-    // float num_actions = 8;
-    // float nrzns = 5000;
-    // float bDimx = nrzns;
-    // float F = 20.2;
-    // float r_outbound = -10;
-    // float r_terminal = 10;
-    // float i_term = 19;
-    // float j_term = 40;
-    // float nmodes = 5;
-    // float x0 = 0.005;
-    // float y0 = 0.005;
-    // float dx = 0.01; float dy = 0.01;
-    // float dt = 0.0004;
-    // if (nrzns >= 1000)
-    //     bDimx = 1000;
-
-    // //TODO: define output file savepath
-
-    // float z = -9999;
-    // // TODO: 1. read paths form file
-    // //       2. Make sure files are stored in np.float32 format
-    // std::string data_path = "data/nT_60/";
-    // std::string all_u_fname = data_path + "all_u_mat.npy";
-    // std::string all_v_fname = data_path + "all_v_mat.npy";
-    // std::string all_ui_fname = data_path + "all_ui_mat.npy";
-    // std::string all_vi_fname = data_path + "all_vi_mat.npy";
-    // std::string all_yi_fname = data_path + "all_Yi.npy";
-    
-// --------------------------------------------------------------------------------
-
 
     #include "input_to_build_model.h"
-
-    if (nrzns >= 1000)
-    bDimx = 1000;
  
     int reward_type = get_reward_type(prob_type);
     std::cout << "Reward type: " << reward_type << "\n";
@@ -1186,39 +928,11 @@ int main(){
         std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
     }
 
-    //TODO: move to custom functions
-    // populate_ac_angles(ac_angles, num_actions);
-    // populte_ac_speeds()
-    // print_array<float>(ac_angles, num_actions, "ac_angles", "\n");
-
-    //----- start copying data to device --------
-
-    // Copy vel field data to device memory using thrust device_vector
-    thrust::device_vector<float> D_all_u_vec (all_u_mat, all_u_mat + all_u_n_elms);
-    thrust::device_vector<float> D_all_v_vec (all_v_mat, all_v_mat + all_v_n_elms);
-    thrust::device_vector<float> D_all_ui_vec (all_ui_mat, all_ui_mat + all_ui_n_elms);
-    thrust::device_vector<float> D_all_vi_vec (all_vi_mat, all_vi_mat + all_vi_n_elms);
-    thrust::device_vector<float> D_all_yi_vec (all_yi_mat, all_yi_mat + all_yi_n_elms);
-    thrust::device_vector<float> D_all_s_vec (all_s_mat, all_s_mat + all_s_n_elms);
-    thrust::device_vector<int> D_all_mask_vec (all_mask_mat, all_mask_mat + all_mask_n_elms);
-
-
-    float* D_all_u_arr = thrust::raw_pointer_cast(&D_all_u_vec[0]);
-    float* D_all_v_arr = thrust::raw_pointer_cast(&D_all_v_vec[0]);
-    float* D_all_ui_arr = thrust::raw_pointer_cast(&D_all_ui_vec[0]);
-    float* D_all_vi_arr = thrust::raw_pointer_cast(&D_all_vi_vec[0]);
-    float* D_all_yi_arr = thrust::raw_pointer_cast(&D_all_yi_vec[0]);
-    float* D_all_s_arr = thrust::raw_pointer_cast(&D_all_s_vec[0]);
-    int* D_all_mask_arr = thrust::raw_pointer_cast(&D_all_mask_vec[0]);
-
 
     std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
 
-    thrust::device_vector<float> D_tdummy(2,0);
-    // initialise empty device vectors. These contain time-invariant data
-    thrust::device_vector<float> D_params(32);
-    thrust::device_vector<float> D_xs(gsize);
-    thrust::device_vector<float> D_ys(gsize);
+    thrust::host_vector<float> H_tdummy(2,0);
+
 
     // initialise reuseable host vectors
     thrust::host_vector<int32_t> H_coo_len_per_ac(num_actions);
@@ -1241,10 +955,6 @@ int main(){
     }
 
     ncells = gsize*gsize;           // assign value to global variable
-    // copy data from host to device
-    D_params = H_params;
-    D_xs = H_xs;
-    D_ys = H_ys;
 
     // run time loop and compute transition data for each time step
     auto start = high_resolution_clock::now(); 
@@ -1253,16 +963,15 @@ int main(){
     //IMP: Run time loop till nt-1. There ar no S2s to S1s in the last timestep
     for(int t = 0; t < nt-1; t++){
         std::cout << "*** Computing data for timestep, T = " << t << std::endl;
-        D_tdummy[0] = t;
+        H_tdummy[0] = t;
         start = high_resolution_clock::now(); 
             for(int action_id = 0; action_id < num_actions; action_id++){
                 // std::cout << "  * action_id= " << action_id;
-                
                 // this function also concats coos across time.
-                build_sparse_transition_model_at_T_at_a(t, action_id, bDimx, D_tdummy, D_all_u_arr, D_all_v_arr, 
-                        D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
-                        D_all_s_arr, D_all_mask_arr,
-                        D_params, D_xs, D_ys, H_actions, 
+                build_sparse_transition_model_at_T_at_a(t, action_id, bDimx, H_tdummy, all_u_mat, all_v_mat, 
+                        all_ui_mat, all_vi_mat, all_yi_mat,
+                        all_s_mat, all_mask_mat,
+                        H_params, H_xs, H_ys, H_actions, 
                         H_coo_len_per_ac,
                         H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
                         H_Aarr_of_Rs);
@@ -1447,34 +1156,6 @@ cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elem
 
 }
 
-
-
-// template<typename dType>
-void print_device_vector( thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method){
-    std::cout << array_name << "  from id " << start_id << "  to  " << end_id << std::endl;
-    if (method == 1){
-        float temp = -10000000;
-        for(int i = start_id; i < end_id; i++){
-            if (array[i] != temp){
-                std::cout << i << "\n";
-                std::cout << array[i] << " " << end;
-                std::cout << "\n";
-                temp = array[i];
-            }
-        }
-    }
-
-    else if (method == 0){
-        for(int i = start_id; i < end_id; i++)
-            std::cout << array[i] << " " << end;
-    }
-
-    else
-        std::cout << "Invalid input for argument: method";
-
-
-    std::cout << std::endl;
-}
 
 
 void make_dir(std::string dir_name){

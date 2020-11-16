@@ -1,8 +1,8 @@
 import numpy as np
 
 
-prob_name_1 = "src/data_modelOutput/time/test_g200x200x10_r10k/a1x4_i2_j7_ref1"
-prob_name_2 = "src/data_modelOutput/time/test_g200x200x10_r10/a1x4_i2_j7_ref1"
+prob_name_1 = "src/data_modelOutput/time/test_g70x70x5_r5k/a1x16_i32_j32_ref1"
+prob_name_2 = "src/data_modelOutput/time/test_g70x70x5_r5k_master/a1x16_i32_j32_ref1"
 
 s1file1 = prob_name_1 + "/master_cooS1.npy"
 s1file2 = prob_name_2 + "/master_cooS1.npy"
@@ -60,8 +60,8 @@ def verbose_compare(np1, np2, rng_st, rng_end, nprints=None):
         else:
             status = "same"
             
-        # if status == "Diff":
-        print(i, np1[i][0], "\t", np2[i][0], "\t", status)
+        if status == "Diff":
+            print(i, np1[i][0], "\t", np2[i][0], "\t", status)
 
         if i == nprints:
             break
@@ -131,10 +131,10 @@ def print_coo(S1, S2, V, num_prints):
          print(i, "\t| ", S1[i][0], "\t", S2[i][0], "\t", V[i][0])
 
 # # test()
-compare(S1_f1, S1_f2)
-compare(S2_f1, S2_f2)
-compare(V_f1, V_f2)
+# compare(S1_f1, S1_f2)
+# compare(S2_f1, S2_f2)
+# compare(V_f1, V_f2)
 compare(R_f1, R_f2)
 
-# verbose_compare(S1_f1, S1_f2, 22719, 23000)
+verbose_compare(R_f1, R_f2, 75, 1000)
 # check_consecutive_pairs(S1_f2)
