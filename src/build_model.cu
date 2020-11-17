@@ -219,6 +219,116 @@ __device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
     return posids[1] + gsize*posids[0]*1LL ;
 }
 
+// __device__ get_4_S2s_from_posids(){
+//     // 4 square area concept- to make fractional counts
+
+// }
+
+// __device__ void get_nearest_cell_centre_posids(float* xs, float* ys, float* params, int32_t gsize, float* pos_xy, float* pos_xy_nearest_centre){
+//     // compute x,y for cell-centre for the cell that contains posids(x,y)
+//     // posids = [x,y]
+//     // posids_nearest_centre = [xc, yc]
+//     float dx = params[16];
+//     float dy = params[17];
+//     float x = pos_xy[0];
+//     float y = pos_xy[1];
+//     int32_t i_up = (int32_t) y/dy; // i_up indexing direction from bottom to top wrt grid
+//     int32_t j = (int32_t) x/dx;
+//     pos_xy_nearest_centre[0] = xs[j];
+//     pos_xy_nearest_centre[1] = ys[i_up]
+//     return;
+}
+
+
+__device__ void get_cx_cy(float* pos_xy, float* pos_xy_nearest_centre, float* cx_cy){
+    // computes cx anc cy: distance of cell centre from posid
+    for(int i = 0; i < 2; i++)
+        cx_cy[i] = pos_xy_nearest_centre[i] - pos_xy[i];
+
+    return;
+}
+
+
+__device__ void bring_back_inside_grid(int32_t* posids, int32_t gsize){
+    // if posids = (i,j) happend to be just outside grid, (i,j) are modified
+    // to bring it back inside
+    // IMP: To be only used inside get_areas_and_rel_sp_ids()
+    //      Hardcoded for exactly one unit outside grid because of 
+    //      construction of get_areas_and_rel_sp_ids
+    int32_t n = gsize - 1;
+    int32_t i = posids[0];
+    int32_t j = posids[1];
+
+    if (i < 0){
+        i += 1;
+    }
+    else if (i > n){
+        i -= 1;
+    }
+
+
+    if (j < 0){
+        j += 1;
+    }
+    else if (j > n){
+        j -= 1;
+    }
+    posids[0] = i;
+    posids[1] = j;
+
+    return;
+}
+
+
+__device__ void get_areas_and_rel_sp_ids(int32_t* posids_relS2_0, int32_t m, int32_t* posids_S2,
+                                        float* xs, float* ys, float* params, 
+                                        float *cx_cy,  float* areas, float* rel_sp_ids){
+    // fills areas and rel_sp_ids arrays with areas (fractional counts) and corresponding rel_sp_ids
+    // order of rel_sp_ids: (i,j), (i,j+-1), (i+-1, j), (i-+1, j-+1)
+    float dx = params[16];
+    float dy = params[17];
+    float cx = cx_cy[0];
+    float cy = cx_cy[1];
+    float abs_cx = fabsf(cx);
+    float abs_cy = fabsf(cy);
+    int32_t gsize = params[0];
+    areas[0] = (dx - abs_cx)*(dx - abs_cx);
+    areas[1] = (dy - abs_cy)*abs_cx;
+    areas[2] = abs_cy*(dx- abs_cx);
+    areas[3] = abs_cx*abs_cy;
+    int32_t k_x = 1;
+    int32_t k_y = 1;
+    if (cx < 0)
+        k_x = -1;
+    if (cy < 0)
+        k_y = -1;
+    
+    int32_t i1 = posids_S2[0];
+    int32_t j1 = posids_S2[1];
+    
+    int32_t posids_S2_1[2] = {i1        , j1        };
+    
+    if (!is_edge_state(i1, j1)){
+        int32_t posids_S2_2[2] = {i1        , j1 + k_x  };
+        int32_t posids_S2_3[2] = {i1 - k_y  , j1        };
+        int32_t posids_S2_4[2] = {i1 - k_y  , j1 + k_x  };
+    }
+    else{
+        bring_back_inside_grid(posids_S2_2, gsize);
+        bring_back_inside_grid(posids_S2_3, gsize);
+        bring_back_inside_grid(posids_S2_4, gsize);
+    }
+  
+    
+    // get_posids_from_sp_id(long long int sp_id, int gsize, int32_t* posids)
+    // float rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
+    rel_sp_ids[0] = get_rel_sp_id2(m, posids_S2_1, posids_relS2_0);
+    rel_sp_ids[1] = get_rel_sp_id2(m, posids_S2_2, posids_relS2_0);
+    rel_sp_ids[2] = get_rel_sp_id2(m, posids_S2_3, posids_relS2_0);
+    rel_sp_ids[3] = get_rel_sp_id2(m, posids_S2_4, posids_relS2_0);
+
+    return;
+}
 
 __device__ float get_angle_in_0_2pi(float theta){
     float f_pi = 3.141592;
@@ -262,7 +372,7 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
 }
 
 
-__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* params, float* r ){
+__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* pos_xy, float* params, float* r ){
     int32_t gsize = params[0];
     int32_t n = params[0] - 1;      // gsize - 1
     // int32_t num_actions = params[1];
@@ -284,21 +394,10 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     get_xypos_from_ij(i0, j0, gsize, xs, ys, &x, &y); // x, y stores centre coords of state i0,j0
     float xnew = x + (vnetx * dt);
     float ynew = y + (vnety * dt);
+
     // float r_step = 0;
     *r = 0;         // intiilaise r with 0
 
-
-    //checks TODO: remove checks once verified
-    // if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-    // {
-    //     params[14] = x;
-    //     params[15] = y;
-    //     params[16] = vnetx;
-    //     params[17] = vnety;
-    //     params[18] = xnew;
-    //     params[19] = ynew;
-    //     params[20] = ac_angle;
-    // }
     if (xnew > xs[n])
         {
             xnew = xs[n];
@@ -319,6 +418,8 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             ynew =  ys[0];
             *r += r_outbound;
         }
+    pos_xy[0] = xnew;
+    pos_xy[1] = ynew;
     // TODO:xxDONE check logic wrt remainderf. remquof had issue
     int32_t xind, yind;
     //float remx = remquof((xnew - xs[0]), Dj, &xind);
@@ -349,11 +450,7 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
                 {
                     *r += r_outbound;
                 }
-            
-            if (threadIdx.x == 0 && blockIdx.z == 0 && blockIdx.x == 1 && blockIdx.y == 1)
-            {
-                // params[26] = 9999;
-            }
+
         }
 
     // r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
@@ -524,6 +621,10 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
     long long int rel_sp_id2;
     int32_t posids_relS2_0[2];
     int32_t posids_S1[2];
+    float* pos_xy[2];
+    float* cx_cy[2];
+    float* area_counts[4];
+    float* rel_sp_ids[4];
     int32_t m = (int32_t) params[18];
     int32_t Nb = (m*m) + 1;
     float one = 1.0;
@@ -558,7 +659,7 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
             if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
 
                 // moves agent and adds r_outbound and r_terminal to r
-                move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+                move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, pos_xy, params, &r);
                 sp_id2 = get_sp_id_from_posid(posids, gsize);
                 extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
                 
@@ -578,13 +679,20 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         }
   
         get_posids_relS2_0(m, posids_S1, posids_relS2_0);
-        rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
-        res_idx = sp_id*Nb + rel_sp_id2;
-        float b = atomicAdd(&results[res_idx], one);
+        get_xypos_from_ij(posids[0], posids[1], gsize ,xs, ys, 
+                        pos_xy_nearest_centre[0], pos_xy_nearest_centre[1]);
+        get_cx_cy(pos_xy, pos_xy_nearest_centre, cx_cy);
+        get_areas_and_rel_sp_ids(posids_relS2_0, m, posids,xs, ys, 
+                                    params, cx_cy, area_counts, rel_sp_ids);
+        
+        // rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
+        for(int i = 0; i<4; i++){
+            res_idx = sp_id*Nb + rel_sp_id2;
+            float b = atomicAdd(&results[res_idx], one);
 
-        //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
-        float a = atomicAdd(&sumR_sa[sp_id], r); 
-
+            //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
+            float a = atomicAdd(&sumR_sa[sp_id], r); 
+        }
         __syncthreads();
         // if (threadIdx.x == 0 && blockIdx.z == 0)
         //     sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
