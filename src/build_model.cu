@@ -224,6 +224,47 @@ __device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
 
 // }
 
+
+
+__device__ void get_cx_cy(float* pos_xy, float* pos_xy_nearest_centre, float* cx_cy){
+    // computes cx anc cy: distance of cell centre from posid
+    for(int i = 0; i < 2; i++)
+        cx_cy[i] = pos_xy_nearest_centre[i] - pos_xy[i];
+
+    return;
+}
+
+
+// __device__ void bring_back_inside_grid(int32_t* posids, int32_t gsize){
+//     // if posids = (i,j) happend to be just outside grid, (i,j) are modified
+//     // to bring it back inside
+//     // IMP: To be only used inside get_areas_and_rel_sp_ids()
+//     //      Hardcoded for exactly one unit outside grid because of 
+//     //      construction of get_areas_and_rel_sp_ids
+//     int32_t n = gsize - 1;
+//     int32_t i = posids[0];
+//     int32_t j = posids[1];
+
+//     if (i < 0){
+//         i += 1;
+//     }
+//     else if (i > n){
+//         i -= 1;
+//     }
+
+
+//     if (j < 0){
+//         j += 1;
+//     }
+//     else if (j > n){
+//         j -= 1;
+//     }
+//     posids[0] = i;
+//     posids[1] = j;
+
+//     return;
+// }
+
 // __device__ void get_nearest_cell_centre_posids(float* xs, float* ys, float* params, int32_t gsize, float* pos_xy, float* pos_xy_nearest_centre){
 //     // compute x,y for cell-centre for the cell that contains posids(x,y)
 //     // posids = [x,y]
@@ -237,52 +278,9 @@ __device__ long long int get_sp_id_from_posid(int32_t* posids, int32_t gsize){
 //     pos_xy_nearest_centre[0] = xs[j];
 //     pos_xy_nearest_centre[1] = ys[i_up]
 //     return;
-}
+// }
 
-
-__device__ void get_cx_cy(float* pos_xy, float* pos_xy_nearest_centre, float* cx_cy){
-    // computes cx anc cy: distance of cell centre from posid
-    for(int i = 0; i < 2; i++)
-        cx_cy[i] = pos_xy_nearest_centre[i] - pos_xy[i];
-
-    return;
-}
-
-
-__device__ void bring_back_inside_grid(int32_t* posids, int32_t gsize){
-    // if posids = (i,j) happend to be just outside grid, (i,j) are modified
-    // to bring it back inside
-    // IMP: To be only used inside get_areas_and_rel_sp_ids()
-    //      Hardcoded for exactly one unit outside grid because of 
-    //      construction of get_areas_and_rel_sp_ids
-    int32_t n = gsize - 1;
-    int32_t i = posids[0];
-    int32_t j = posids[1];
-
-    if (i < 0){
-        i += 1;
-    }
-    else if (i > n){
-        i -= 1;
-    }
-
-
-    if (j < 0){
-        j += 1;
-    }
-    else if (j > n){
-        j -= 1;
-    }
-    posids[0] = i;
-    posids[1] = j;
-
-    return;
-}
-
-
-__device__ void get_areas_and_rel_sp_ids(int32_t* posids_relS2_0, int32_t m, int32_t* posids_S2,
-                                        float* xs, float* ys, float* params, 
-                                        float *cx_cy,  float* areas, float* rel_sp_ids){
+__device__ void get_areas(float* params, float* cx_cy,  float* areas){
     // fills areas and rel_sp_ids arrays with areas (fractional counts) and corresponding rel_sp_ids
     // order of rel_sp_ids: (i,j), (i,j+-1), (i+-1, j), (i-+1, j-+1)
     float dx = params[16];
@@ -292,43 +290,65 @@ __device__ void get_areas_and_rel_sp_ids(int32_t* posids_relS2_0, int32_t m, int
     float abs_cx = fabsf(cx);
     float abs_cy = fabsf(cy);
     int32_t gsize = params[0];
-    areas[0] = (dx - abs_cx)*(dx - abs_cx);
-    areas[1] = (dy - abs_cy)*abs_cx;
-    areas[2] = abs_cy*(dx- abs_cx);
-    areas[3] = abs_cx*abs_cy;
-    int32_t k_x = 1;
-    int32_t k_y = 1;
-    if (cx < 0)
-        k_x = -1;
-    if (cy < 0)
-        k_y = -1;
+    float areas_temp[4]; // 
+
+    areas_temp[0] = (dx - abs_cx)*(dx - abs_cx);
+    areas_temp[1] = (dy - abs_cy)*abs_cx;
+    areas_temp[2] = abs_cy*(dx- abs_cx);
+    areas_temp[3] = abs_cx*abs_cy;
     
-    int32_t i1 = posids_S2[0];
-    int32_t j1 = posids_S2[1];
-    
-    int32_t posids_S2_1[2] = {i1        , j1        };
-    
-    if (!is_edge_state(i1, j1)){
-        int32_t posids_S2_2[2] = {i1        , j1 + k_x  };
-        int32_t posids_S2_3[2] = {i1 - k_y  , j1        };
-        int32_t posids_S2_4[2] = {i1 - k_y  , j1 + k_x  };
+    if (cx >= 0 && cy >= 0){
+        areas[0] = areas_temp[2];
+        areas[1] = areas_temp[3];
+        areas[2] = areas_temp[0];
+        areas[3] = areas_temp[1];
     }
-    else{
-        bring_back_inside_grid(posids_S2_2, gsize);
-        bring_back_inside_grid(posids_S2_3, gsize);
-        bring_back_inside_grid(posids_S2_4, gsize);
+    else if (cx < 0 && cy >= 0){
+        areas[0] = areas_temp[3];
+        areas[1] = areas_temp[2];
+        areas[2] = areas_temp[1];
+        areas[3] = areas_temp[0];
+    }    
+    else if (cx < 0 && cy < 0){
+        areas[0] = areas_temp[1];
+        areas[1] = areas_temp[0];
+        areas[2] = areas_temp[3];
+        areas[3] = areas_temp[2];
     }
+    else if (cx >= 0 && cy < 0){
+        areas[0] = areas_temp[0];
+        areas[1] = areas_temp[1];
+        areas[2] = areas_temp[2];
+        areas[3] = areas_temp[3];
+    }
+    
+    // int32_t i1 = posids_S2[0];
+    // int32_t j1 = posids_S2[1];
+    
+    // int32_t posids_S2_1[2] = {i1        , j1        };
+    
+    // if (!is_edge_state(i1, j1)){
+    //     int32_t posids_S2_2[2] = {i1        , j1 + k_x  };
+    //     int32_t posids_S2_3[2] = {i1 - k_y  , j1        };
+    //     int32_t posids_S2_4[2] = {i1 - k_y  , j1 + k_x  };
+    // }
+    // else{
+    //     bring_back_inside_grid(posids_S2_2, gsize);
+    //     bring_back_inside_grid(posids_S2_3, gsize);
+    //     bring_back_inside_grid(posids_S2_4, gsize);
+    // }
   
     
     // get_posids_from_sp_id(long long int sp_id, int gsize, int32_t* posids)
-    // float rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
-    rel_sp_ids[0] = get_rel_sp_id2(m, posids_S2_1, posids_relS2_0);
-    rel_sp_ids[1] = get_rel_sp_id2(m, posids_S2_2, posids_relS2_0);
-    rel_sp_ids[2] = get_rel_sp_id2(m, posids_S2_3, posids_relS2_0);
-    rel_sp_ids[3] = get_rel_sp_id2(m, posids_S2_4, posids_relS2_0);
+    // // float rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
+    // rel_sp_ids[0] = get_rel_sp_id2(m, posids_S2_1, posids_relS2_0);
+    // rel_sp_ids[1] = get_rel_sp_id2(m, posids_S2_2, posids_relS2_0);
+    // rel_sp_ids[2] = get_rel_sp_id2(m, posids_S2_3, posids_relS2_0);
+    // rel_sp_ids[3] = get_rel_sp_id2(m, posids_S2_4, posids_relS2_0);
 
     return;
 }
+
 
 __device__ float get_angle_in_0_2pi(float theta){
     float f_pi = 3.141592;
@@ -372,7 +392,8 @@ __device__ float calculate_one_step_reward(float ac_speed, float ac_angle, float
 }
 
 
-__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, int32_t* posids, float* pos_xy, float* params, float* r ){
+__device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* xs, float* ys, 
+                float* params, int32_t corner_id, int32_t* posids_ip, int32_t* posids_op, float* pos_xy, float* r ){
     int32_t gsize = params[0];
     int32_t n = params[0] - 1;      // gsize - 1
     // int32_t num_actions = params[1];
@@ -384,17 +405,34 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     float r_outbound = params[5];
     float r_terminal = params[6];
     // int32_t nT = params[10];
-    float Dj = fabsf(xs[1] - xs[0]);
+    float Dj = fabsf(xs[1] - xs[0]); // TODO: change to dx,dy using params
     float Di = fabsf(ys[1] - ys[0]);
-    int32_t i0 = posids[0];
-    int32_t j0 = posids[1];
+    int32_t i0 = posids_ip[0];
+    int32_t j0 = posids_ip[1];
     float vnetx = F*cosf(ac_angle) + vx;
     float vnety = F*sinf(ac_angle) + vy;
     float x, y;
     get_xypos_from_ij(i0, j0, gsize, xs, ys, &x, &y); // x, y stores centre coords of state i0,j0
+           
+    if (corner_id == 1){    //UL
+        x -= Dj/2;
+        y += Di/2;
+    }
+    else if (corner_id == 2){   //UR
+        x += Dj/2;
+        y += Di/2;
+    }
+    else if (corner_id == 3){   //LL
+        x -= Dj/2;
+        y -= Di/2;
+    }    
+    else if (corner_id == 4){      //LR
+        x += Dj/2;
+        y -= Di/2;
+    }
+
     float xnew = x + (vnetx * dt);
     float ynew = y + (vnety * dt);
-
     // float r_step = 0;
     *r = 0;         // intiilaise r with 0
 
@@ -444,9 +482,9 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     if (!(my_isnan(xind) || my_isnan(yind)))
         {   
             // update posids
-            posids[0] = yind;
-            posids[1] = xind;
-            if (is_edge_state(posids[0], posids[1]))  //line 110
+            posids_op[0] = yind;
+            posids_op[1] = xind;
+            if (is_edge_state(posids_op[0], posids_op[1]))  //line 110
                 {
                     *r += r_outbound;
                 }
@@ -456,7 +494,7 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
     // r_step = calculate_one_step_reward(ac_speed, ac_angle, xs, ys, i0, j0, x, y, posids, params, vnetx, vnety);
     // // r_step = -dt;
     // *r += r_step; //TODO: numerical check remaining
-    if (is_terminal(posids[0], posids[1], params))
+    if (is_terminal(posids_op[0], posids_op[1], params))
         {
             *r += r_terminal;
         }
@@ -465,8 +503,6 @@ __device__ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t
             if (T == nt-2)
                 *r += r_outbound; 
         }
-
-
     }
 
 
@@ -621,13 +657,18 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
     long long int rel_sp_id2;
     int32_t posids_relS2_0[2];
     int32_t posids_S1[2];
-    float* pos_xy[2];
-    float* cx_cy[2];
-    float* area_counts[4];
-    float* rel_sp_ids[4];
+    float pos_xy[2];
+    float pos_xy_nearest_centre[2];
+    float cx_cy[2];
+    float area_counts[4];
+    int32_t rel_sp_ids[4];
+    float rs[4];
+    long long int sp_ids[4];
+    int32_t four_posids[4][2];
     int32_t m = (int32_t) params[18];
     int32_t Nb = (m*m) + 1;
     float one = 1.0;
+    float r_avg;
     
     if(idx < gridDim.x*gridDim.y*nrzns && sp_id < ncells) //or idx < arr_size
     {
@@ -646,53 +687,72 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         // }
             
         //  Afer move() these will be overwritten by i and j values of S2
-        float r=0;              // to store immediate reward
+        float r;              // to store immediate reward
         float r_step;
 
-        
         extract_velocity(posids, sp_id, ncells, &vx, &vy, T, all_u_mat, all_v_mat, all_ui_mat, all_vi_mat, all_Yi, params);
         extract_radiation(sp_id, T, ncells, D_all_s_mat, &rad1);
-        
+
+        // ------ compute four square areas ---------
+        get_posids_relS2_0(m, posids_S1, posids_relS2_0);   // compoute posids_relS2_0
+        // compute posids for transition from centre
+        move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, 0, posids_S1, posids, pos_xy, &r); 
+        // compute xy of centre of cell transitioned to from centre of S1
+        get_xypos_from_ij(posids[0], posids[1], gsize ,xs, ys, &pos_xy_nearest_centre[0], &pos_xy_nearest_centre[1]); 
+        // compute cx and cy required for areas
+        get_cx_cy(pos_xy, pos_xy_nearest_centre, cx_cy);
+        // compute areas
+        get_areas(params, cx_cy, area_counts);
+
         // if s1 not terminal
         if (is_terminal(posids[0], posids[1], params) == false){
             // if s1 not in obstacle
             if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
 
+                r = 0;
                 // moves agent and adds r_outbound and r_terminal to r
-                move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, pos_xy, params, &r);
-                sp_id2 = get_sp_id_from_posid(posids, gsize);
-                extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
-                
-                // adds one step-reward based on method. mehthod is available in params
-                r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
-                r += r_step;
+                for(int i=0; i<4; i++){
+                    move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, i + 1, posids_S1, posids, pos_xy, &r);
+                    sp_id2 = get_sp_id_from_posid(posids, gsize);
+                    rel_sp_ids[i] = get_rel_sp_id2(m, posids, posids_relS2_0);
+                    extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
+                    // adds one step-reward based on method. mehthod is available in params
+                    r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
+                    r += r_step;
+                    rs[i] = r;
+                    sp_ids[i] = sp_id2;
+                }
 
-                // if S2 is an obstacle cell. then penalise with r_outbound
-                // if (is_in_obstacle(sp_id2, T+1, ncells, D_all_mask_mat) == true )
-                //     r = r_outbound;
-                if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true)
-                    r = r_outbound;
+                if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true){
+                    for(int i=0; i<4; i++){
+                        rs[i] = r_outbound;
+                    }
+                }             
             }
             // if s1 is in obstacle, then no update to posid
-            else
-                r = r_outbound;
+            else{
+                for(int i=0; i<4; i++){
+                    rs[i] = r_outbound;
+                }
+            }
         }
-  
-        get_posids_relS2_0(m, posids_S1, posids_relS2_0);
-        get_xypos_from_ij(posids[0], posids[1], gsize ,xs, ys, 
-                        pos_xy_nearest_centre[0], pos_xy_nearest_centre[1]);
-        get_cx_cy(pos_xy, pos_xy_nearest_centre, cx_cy);
-        get_areas_and_rel_sp_ids(posids_relS2_0, m, posids,xs, ys, 
-                                    params, cx_cy, area_counts, rel_sp_ids);
-        
-        // rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
-        for(int i = 0; i<4; i++){
-            res_idx = sp_id*Nb + rel_sp_id2;
-            float b = atomicAdd(&results[res_idx], one);
 
-            //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
-            float a = atomicAdd(&sumR_sa[sp_id], r); 
+        // rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
+        float b;
+        float area;
+        for(int i = 0; i < 4; i++){
+            res_idx = sp_ids[i]*Nb + rel_sp_ids[i];
+            area = area_counts[i];
+            b = atomicAdd(&results[res_idx], area);
         }
+
+        //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
+        for(int i = 0; i < 4; i++){
+            r_avg += rs[i]*area_counts[i];
+        }
+        float a = atomicAdd(&sumR_sa[sp_id], r_avg); 
+
+
         __syncthreads();
         // if (threadIdx.x == 0 && blockIdx.z == 0)
         //     sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
@@ -929,7 +989,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         D_master_S2_arr);
 
     cudaDeviceSynchronize();
-
+    std::cout << " post transition_calc\n";
     // // CHECK copy data back to host for check
     // std::cout << "a" << n <<"\n vx at s1=0: " << D_params[31] << std::endl;
     // std::cout <<"\n vx at s1=0: " << D_params[30] << std::endl;
@@ -958,18 +1018,23 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     assert( blocks_per_grid * threads_per_block >= Nthreads);
     
     compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
-
     // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
     cudaDeviceSynchronize();
+    std::cout << " post compute mean\n";
+
     //initialising vectors for counting nnzs or number of uniqe S2s for S1s
+    std::cout << " ncells= " << ncells <<"\n";
     thrust::device_vector<unsigned long long int> D_num_uq_s2(ncells,0);
     thrust::device_vector<unsigned long long int> D_prSum_num_uq_s2(ncells);
+    std::cout << " post device_vector\n";
+
     unsigned long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2[0]);
     unsigned long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2[0]);
     //one thread per element
     // count no. of ug unique S2 for each S1 and fill in num_uq_s2
     count_kernel<<<ncells, Nb>>>(D_master_S2_arr, nrzns, num_uq_s2_ptr);
     cudaDeviceSynchronize();
+    std::cout << " post count_kernel\n";
 
         //CHECKs
         // std::cout << "D_num_uq_s2_pc\n";
@@ -993,7 +1058,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     long long int nnz = thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
     // get prefix sum of D_num_uq_s2. This helps threads to access apt COO indices in reduce_kernel
     thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
-    // std::cout << "nnz = " << nnz<< "\n";
+    std::cout << "nnz = " << nnz<< "\n";
 
     //initilise coo arrays (concated across actions)
     thrust::device_vector<long long int> D_coo_s1(nnz);
@@ -1012,6 +1077,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                 ncells, nrzns, gsize, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, 
                                 num_uq_s2_ptr, prSum_num_uq_s2_ptr);
     cudaDeviceSynchronize();
+    std::cout << " post reduce_kernel\n";
 
         //Checks
         // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
