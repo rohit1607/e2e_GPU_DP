@@ -737,22 +737,20 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
             }
         }
 
-        // rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
         float b;
         float area;
         for(int i = 0; i < 4; i++){
-            res_idx = sp_ids[i]*Nb + rel_sp_ids[i];
+            res_idx = sp_id*Nb + rel_sp_ids[i];
             area = area_counts[i];
             b = atomicAdd(&results[res_idx], area);
         }
+        // __syncthreads();
 
         //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
         for(int i = 0; i < 4; i++){
             r_avg += rs[i]*area_counts[i];
         }
         float a = atomicAdd(&sumR_sa[sp_id], r_avg); 
-
-
         __syncthreads();
         // if (threadIdx.x == 0 && blockIdx.z == 0)
         //     sumR_sa[sp_id] = sumR_sa[sp_id]/nrzns;    //TODO: xxdone sumR_sa is now actually meanR_sa!
@@ -950,12 +948,12 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         DimGrid_z = (nrzns/bDimx);
 
     // checks
-    // if (t == nt-2){
-    //     std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
-    //     std::cout<<"gisze= " << gsize << std::endl;
-    //     std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
-    //     std::cout<<"bDimx = " <<  bDimx << std::endl;
-    // }
+    if (t == 0){
+        std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
+        std::cout<<"gisze= " << gsize << std::endl;
+        std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
+        std::cout<<"bDimx = " <<  bDimx << std::endl;
+    }
  
 
     // initialse master S2 array
@@ -990,6 +988,13 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
 
     cudaDeviceSynchronize();
     std::cout << " post transition_calc\n";
+    // int i = 0;
+    // while (i>=0){
+    //     if(i%100000000 == 0){
+    //         std::cout<<i<<", ";
+    //     }
+    //     i+=1;
+    // }
     // // CHECK copy data back to host for check
     // std::cout << "a" << n <<"\n vx at s1=0: " << D_params[31] << std::endl;
     // std::cout <<"\n vx at s1=0: " << D_params[30] << std::endl;
@@ -1008,7 +1013,10 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     //     std::cout << H_sumR_sa[i] << std::endl;
     // for(int i = 0; i < 10; i ++)
     //     std::cout << H_S2_vec[i] << std::endl;
-    
+
+
+// /* TEMP Comments  
+
 
     int Nthreads = D_master_sumRsa_vector.size();
     assert(Nthreads == ncells);
@@ -1016,7 +1024,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     int threads_per_block = 1024;
     int blocks_per_grid = (Nthreads/threads_per_block) + 1;
     assert( blocks_per_grid * threads_per_block >= Nthreads);
-    
+  
     compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
     // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
     cudaDeviceSynchronize();
@@ -1054,82 +1062,83 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         // std::cout << "cnt1 = " << cnt1 << "\ncnt2 = " << cnt2 <<"\n";
 
 
-    // calc nnz: number of non zero elements(or unique S2s) for a given S1 and action
-    long long int nnz = thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
-    // get prefix sum of D_num_uq_s2. This helps threads to access apt COO indices in reduce_kernel
-    thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
-    std::cout << "nnz = " << nnz<< "\n";
 
-    //initilise coo arrays (concated across actions)
-    thrust::device_vector<long long int> D_coo_s1(nnz);
-    thrust::device_vector<long long int> D_coo_s2(nnz);
-    thrust::device_vector<float> D_coo_count(nnz); // TODO: makde this int32_t and introduce another array for prob
-    long long int* D_coo_s1_arr = thrust::raw_pointer_cast(&D_coo_s1[0]);
-    long long int* D_coo_s2_arr = thrust::raw_pointer_cast(&D_coo_s2[0]);
-    float* D_coo_cnt_arr = thrust::raw_pointer_cast(&D_coo_count[0]);
+        // calc nnz: number of non zero elements(or unique S2s) for a given S1 and action
+        long long int nnz = thrust::reduce(D_num_uq_s2.begin(), D_num_uq_s2.end(), (float) 0, thrust::plus<float>());
+        // get prefix sum of D_num_uq_s2. This helps threads to access apt COO indices in reduce_kernel
+        thrust::exclusive_scan(D_num_uq_s2.begin(), D_num_uq_s2.end(), D_prSum_num_uq_s2.begin());
+        std::cout << "nnz = " << nnz<< "\n";
 
-    Nthreads = ncells;
-    assert(Nthreads == ncells);
-    threads_per_block = 1024;
-    blocks_per_grid = (Nthreads/threads_per_block) + 1;
-    // reduce operation to fill COO arrays
-    reduce_kernel<<<blocks_per_grid, threads_per_block>>>(D_master_S2_arr, t, Nb, m,
-                                ncells, nrzns, gsize, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, 
-                                num_uq_s2_ptr, prSum_num_uq_s2_ptr);
-    cudaDeviceSynchronize();
-    std::cout << " post reduce_kernel\n";
+        //initilise coo arrays (concated across actions)
+        thrust::device_vector<long long int> D_coo_s1(nnz);
+        thrust::device_vector<long long int> D_coo_s2(nnz);
+        thrust::device_vector<float> D_coo_count(nnz); // TODO: makde this int32_t and introduce another array for prob
+        long long int* D_coo_s1_arr = thrust::raw_pointer_cast(&D_coo_s1[0]);
+        long long int* D_coo_s2_arr = thrust::raw_pointer_cast(&D_coo_s2[0]);
+        float* D_coo_cnt_arr = thrust::raw_pointer_cast(&D_coo_count[0]);
 
-        //Checks
-        // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
-        // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
+        Nthreads = ncells;
+        assert(Nthreads == ncells);
+        threads_per_block = 1024;
+        blocks_per_grid = (Nthreads/threads_per_block) + 1;
+        // reduce operation to fill COO arrays
+        reduce_kernel<<<blocks_per_grid, threads_per_block>>>(D_master_S2_arr, t, Nb, m,
+                                    ncells, nrzns, gsize, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, 
+                                    num_uq_s2_ptr, prSum_num_uq_s2_ptr);
+        cudaDeviceSynchronize();
+        std::cout << " post reduce_kernel\n";
 
-        // //reduce D_num_uq_s2_pc in chunks of actions - to find nnz or len_coo_arr for each action
-        // for (int n = 0; n < num_actions; n++){
-        //         // H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*ncells, D_num_uq_s2_pc.begin() +  (n+1)*ncells, (float) 0, thrust::plus<float>());
-        //     H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*eff_chunk_size, D_num_uq_s2_pc.begin() + (n+1)*eff_chunk_size, (float) 0, thrust::plus<float>());
-        // }
-        // thrust::inclusive_scan(H_coo_len_per_ac.begin(), H_coo_len_per_ac.end(), H_coo_len_per_ac.begin());
-        
- 
+            //Checks
+            // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
+            // print_device_vector(D_coo_s2, 0, 10, "D_coo_s2", " ", 0);
 
-
-    // in algo2, this function is for one action, and I already know nnz.
-    // nnz should be filled in a global array 
-    H_coo_len_per_ac[action_id] = nnz;
-    // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
-    assert(action_id >=0);
-    H_Aarr_of_cooS1[action_id].insert(H_Aarr_of_cooS1[action_id].end(), D_coo_s1.begin(), D_coo_s1.end());
-    H_Aarr_of_cooS2[action_id].insert(H_Aarr_of_cooS2[action_id].end(), D_coo_s2.begin(), D_coo_s2.end());
-    H_Aarr_of_cooProb[action_id].insert(H_Aarr_of_cooProb[action_id].end(), D_coo_count.begin(), D_coo_count.end());
-    H_Aarr_of_Rs[action_id].insert(H_Aarr_of_Rs[action_id].end(), D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end());
-
-        //checks
-        // std::cout << "H_coo_len_per_ac" << std::endl;
-        // for (int n = 0; n < num_actions; n++)
-        //   std::cout << H_coo_len_per_ac[n] << std::endl;
-
-        // std::cout << "H_Aarr_of_cooS1" << std::endl;
-        // for (int n = 0; n < num_actions; n++){
-        //     for (int i = 0; i < H_Aarr_of_cooS1[n].size(); i++)
-        //         std::cout << H_Aarr_of_cooS1[n][i] << " , " << H_Aarr_of_cooS2[n][i] << " , " << H_Aarr_of_cooProb[n][i] << std::endl;
-        //     std::cout << std::endl;
-        // }
-
-        // std::cout << "H_Aarr_of_Rs" << std::endl;
-        // for (int n = 0; n < num_actions; n++){
-        //     for (int i = 0; i < ncells; i++)
-        //         std::cout << H_Aarr_of_Rs[n][i] << std::endl;
-        //     std::cout << std::endl;
-        // }
-
-
-        // // array of num_actions decive_vvectors for sum_Rsa_vec
-        // // initialasation with 0 is important. because values are added to this
-        // thrust::host_vector<float> H_arr_sumR_sa[num_actions];
-        // for(int n = 0; n < num_actions; n++){
-        //     H_arr_sumR_sa[n] = thrust::host_vector<float>(nnz[i]);
+            // //reduce D_num_uq_s2_pc in chunks of actions - to find nnz or len_coo_arr for each action
+            // for (int n = 0; n < num_actions; n++){
+            //         // H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*ncells, D_num_uq_s2_pc.begin() +  (n+1)*ncells, (float) 0, thrust::plus<float>());
+            //     H_coo_len_per_ac[n] = thrust::reduce(D_num_uq_s2_pc.begin() + n*eff_chunk_size, D_num_uq_s2_pc.begin() + (n+1)*eff_chunk_size, (float) 0, thrust::plus<float>());
+            // }
+            // thrust::inclusive_scan(H_coo_len_per_ac.begin(), H_coo_len_per_ac.end(), H_coo_len_per_ac.begin());
+            
     
 
+
+        // in algo2, this function is for one action, and I already know nnz.
+        // nnz should be filled in a global array 
+        H_coo_len_per_ac[action_id] = nnz;
+        // Copy Device COO rusults to Host COO vectors across actions and append vectors across time
+        assert(action_id >=0);
+        H_Aarr_of_cooS1[action_id].insert(H_Aarr_of_cooS1[action_id].end(), D_coo_s1.begin(), D_coo_s1.end());
+        H_Aarr_of_cooS2[action_id].insert(H_Aarr_of_cooS2[action_id].end(), D_coo_s2.begin(), D_coo_s2.end());
+        H_Aarr_of_cooProb[action_id].insert(H_Aarr_of_cooProb[action_id].end(), D_coo_count.begin(), D_coo_count.end());
+        H_Aarr_of_Rs[action_id].insert(H_Aarr_of_Rs[action_id].end(), D_master_sumRsa_vector.begin(), D_master_sumRsa_vector.end());
+
+            //checks
+            // std::cout << "H_coo_len_per_ac" << std::endl;
+            // for (int n = 0; n < num_actions; n++)
+            //   std::cout << H_coo_len_per_ac[n] << std::endl;
+
+            // std::cout << "H_Aarr_of_cooS1" << std::endl;
+            // for (int n = 0; n < num_actions; n++){
+            //     for (int i = 0; i < H_Aarr_of_cooS1[n].size(); i++)
+            //         std::cout << H_Aarr_of_cooS1[n][i] << " , " << H_Aarr_of_cooS2[n][i] << " , " << H_Aarr_of_cooProb[n][i] << std::endl;
+            //     std::cout << std::endl;
+            // }
+
+            // std::cout << "H_Aarr_of_Rs" << std::endl;
+            // for (int n = 0; n < num_actions; n++){
+            //     for (int i = 0; i < ncells; i++)
+            //         std::cout << H_Aarr_of_Rs[n][i] << std::endl;
+            //     std::cout << std::endl;
+            // }
+
+
+            // // array of num_actions decive_vvectors for sum_Rsa_vec
+            // // initialasation with 0 is important. because values are added to this
+            // thrust::host_vector<float> H_arr_sumR_sa[num_actions];
+            // for(int n = 0; n < num_actions; n++){
+            //     H_arr_sumR_sa[n] = thrust::host_vector<float>(nnz[i]);
+    
+// */
 }
 
 
@@ -1244,8 +1253,8 @@ int main(){
 
     #include "input_to_build_model.h"
 
-    if (nrzns >= 1000)
-    bDimx = 1000;
+    if (nrzns >= 500)
+    bDimx = 500;
  
     int reward_type = get_reward_type(prob_type);
     std::cout << "Reward type: " << reward_type << "\n";
