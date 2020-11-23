@@ -12,7 +12,7 @@ float y0 = dy/2;
 
 float F = 1;
 int num_ac_speeds = 1; //verify prob_type
-int num_ac_angles = 16;
+int num_ac_angles = 4;
 int32_t num_actions = num_ac_speeds*num_ac_angles;
 
 int32_t nrzns = 5000;     // verify with probname

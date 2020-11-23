@@ -297,13 +297,13 @@ __device__ void get_areas(float* params, float* cx_cy,  float* areas){
     areas_temp[2] = abs_cy*(dx- abs_cx);
     areas_temp[3] = abs_cx*abs_cy;
     
-    if (cx >= 0 && cy >= 0){
+    if (cx > 0 && cy > 0){
         areas[0] = areas_temp[2];
         areas[1] = areas_temp[3];
         areas[2] = areas_temp[0];
         areas[3] = areas_temp[1];
     }
-    else if (cx < 0 && cy >= 0){
+    else if (cx < 0 && cy > 0){
         areas[0] = areas_temp[3];
         areas[1] = areas_temp[2];
         areas[2] = areas_temp[1];
@@ -315,36 +315,50 @@ __device__ void get_areas(float* params, float* cx_cy,  float* areas){
         areas[2] = areas_temp[3];
         areas[3] = areas_temp[2];
     }
-    else if (cx >= 0 && cy < 0){
+    else if (cx > 0 && cy < 0){
         areas[0] = areas_temp[0];
         areas[1] = areas_temp[1];
         areas[2] = areas_temp[2];
         areas[3] = areas_temp[3];
     }
     
-    // int32_t i1 = posids_S2[0];
-    // int32_t j1 = posids_S2[1];
-    
-    // int32_t posids_S2_1[2] = {i1        , j1        };
-    
-    // if (!is_edge_state(i1, j1)){
-    //     int32_t posids_S2_2[2] = {i1        , j1 + k_x  };
-    //     int32_t posids_S2_3[2] = {i1 - k_y  , j1        };
-    //     int32_t posids_S2_4[2] = {i1 - k_y  , j1 + k_x  };
-    // }
-    // else{
-    //     bring_back_inside_grid(posids_S2_2, gsize);
-    //     bring_back_inside_grid(posids_S2_3, gsize);
-    //     bring_back_inside_grid(posids_S2_4, gsize);
-    // }
-  
-    
-    // get_posids_from_sp_id(long long int sp_id, int gsize, int32_t* posids)
-    // // float rel_sp_id2 = get_rel_sp_id2(m, posids, posids_relS2_0);
-    // rel_sp_ids[0] = get_rel_sp_id2(m, posids_S2_1, posids_relS2_0);
-    // rel_sp_ids[1] = get_rel_sp_id2(m, posids_S2_2, posids_relS2_0);
-    // rel_sp_ids[2] = get_rel_sp_id2(m, posids_S2_3, posids_relS2_0);
-    // rel_sp_ids[3] = get_rel_sp_id2(m, posids_S2_4, posids_relS2_0);
+ 
+
+    else if (cx == 0 && cy > 0){
+        areas[0] = areas_temp[0];
+        areas[2] = areas_temp[2];
+        areas[2] = areas_temp[1]; // =0
+        areas[3] = areas_temp[3]; // =0
+    }  
+
+    else if (cx == 0 && cy < 0){
+        areas[0] = areas_temp[2];
+        areas[2] = areas_temp[0]; 
+        areas[1] = areas_temp[1]; // =0
+        areas[3] = areas_temp[3]; // =0
+    }  
+
+    else if (cx < 0 && cy == 0){
+        areas[0] = areas_temp[1];
+        areas[1] = areas_temp[0]; 
+        areas[2] = areas_temp[2]; // =0
+        areas[3] = areas_temp[3]; // =0
+    }  
+
+    else if (cx > 0 && cy == 0){
+        areas[0] = areas_temp[0];
+        areas[1] = areas_temp[1]; 
+        areas[2] = areas_temp[2]; // =0
+        areas[3] = areas_temp[3]; // =0
+    }  
+
+    else if (cx == 0 && cy == 0){
+        areas[0] = areas_temp[0];
+        areas[1] = areas_temp[1]; // =0
+        areas[2] = areas_temp[2]; // =0
+        areas[3] = areas_temp[3]; // =0
+    }  
+
 
     return;
 }
@@ -674,8 +688,11 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
     {
         // int32_t posids[2] = {(int32_t)blockIdx.y, (int32_t)blockIdx.x};    //static declaration of array of size 2 to hold i and j values of S1. 
         int32_t posids[2];    //static declaration of array of size 2 to hold i and j values of S1. 
+        int32_t posids_temp[2];
         get_posids_from_sp_id(sp_id, gsize, posids);
         get_posids_from_sp_id(sp_id, gsize, posids_S1);
+        get_posids_from_sp_id(sp_id, gsize, posids_temp);
+
         int32_t rzn_id = get_rzn_id();
         // if(idx == 0){
         //     params[23] = posids[0];
@@ -696,13 +713,26 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         // ------ compute four square areas ---------
         get_posids_relS2_0(m, posids_S1, posids_relS2_0);   // compoute posids_relS2_0
         // compute posids for transition from centre
-        move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, 0, posids_S1, posids, pos_xy, &r); 
+        move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, 0, posids_S1, posids_temp, pos_xy, &r); 
         // compute xy of centre of cell transitioned to from centre of S1
-        get_xypos_from_ij(posids[0], posids[1], gsize ,xs, ys, &pos_xy_nearest_centre[0], &pos_xy_nearest_centre[1]); 
+        get_xypos_from_ij(posids_temp[0], posids_temp[1], gsize ,xs, ys, &pos_xy_nearest_centre[0], &pos_xy_nearest_centre[1]); 
         // compute cx and cy required for areas
         get_cx_cy(pos_xy, pos_xy_nearest_centre, cx_cy);
         // compute areas
         get_areas(params, cx_cy, area_counts);
+
+        // for(int i=0; i<4; i++){
+        //     if (idx == 0){
+        //         # if __CUDA_ARCH__>=200
+        //             printf("-----trans_kern: cx cy areas, %d \n", idx);
+        //                 // printf("sp_id2[%d]= %d \n", i, sp_id2);
+        //                 // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+        //                 // printf("cx, cy = %f, %f \n", cx_cy[0], cx_cy[1]);
+        //                 printf("areas[%d] = %f \n", i, area_counts[i]);
+        //             // printf("rel_sp_id2 %d \n", rel_sp_id2);
+        //         #endif
+        //     }
+        // }
 
         // if s1 not terminal
         if (is_terminal(posids[0], posids[1], params) == false){
@@ -712,7 +742,33 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                 r = 0;
                 // moves agent and adds r_outbound and r_terminal to r
                 for(int i=0; i<4; i++){
+
+                    // if (idx == 0){
+                    //     # if __CUDA_ARCH__>=200
+                    //         printf("-----trans_kern: PRE-move(), %d\n", i);
+                    //             // printf("sp_id2[%d]= %d \n", i, sp_id2);
+                    //             // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+                    //             printf("posids (i,j) = %d, %d \n", posids[0], posids[1]);
+                            
+                    //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
+                    //     #endif
+                    // }
+
                     move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, i + 1, posids_S1, posids, pos_xy, &r);
+                    
+                    
+                    // if (idx == 0){
+                    //     # if __CUDA_ARCH__>=200
+                    //         printf("-----trans_kern: POST-move(), %d\n", i);
+                    //             // printf("sp_id2[%d]= %d \n", i, sp_id2);
+                    //             // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+                    //             printf("posids (i,j) = %d, %d \n", posids[0], posids[1]);
+                            
+                    //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
+                    //     #endif
+                    // }
+
+
                     sp_id2 = get_sp_id_from_posid(posids, gsize);
                     rel_sp_ids[i] = get_rel_sp_id2(m, posids, posids_relS2_0);
                     extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
@@ -721,6 +777,13 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                     r += r_step;
                     rs[i] = r;
                     sp_ids[i] = sp_id2;
+                    if (idx == 0){
+                        # if __CUDA_ARCH__>=200
+                            printf("-----inside transition kernel_2, %d\n", idx);
+                            printf("sp_ids[%d]= %lld \n", i, sp_id2);
+                        #endif
+                    }
+                    
                 }
 
                 if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true){
@@ -736,6 +799,19 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                 }
             }
         }
+
+        // if (idx == 0){
+        //     # if __CUDA_ARCH__>=200
+        //         printf("-----inside transition kernel_2, %d\n", idx);
+        //         for(int i=0; i<4; i++){
+        //             // printf("sp_ids[%d]= %d \n", i, sp_ids[i]);
+        //             printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+        //             // printf("S2 %d \n", S2);
+        //         }
+                
+        //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
+        //     #endif
+        // }
 
         float b;
         float area;
@@ -815,9 +891,13 @@ __global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
     float count; //first if eval will lead to else condition and do  count++ 
     int32_t posids_relS2_0[2];
     int32_t posids_S1[2];
-
+ 
+ 
 
     if (tid < ncells){
+        // # if __CUDA_ARCH__>=200
+        //     printf("%d *****inside Reduce kernel****\n", tid);
+        // #endif
 
         // int32_t s1 = (tid%ncells) + (t*ncells); // TODO:xxdone change this to nbe a function of a arguments: sp_id and t
         long long int s1 = tid + (t*ncells);
@@ -834,6 +914,17 @@ __global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
                 sp_id2 = get_sp_id2_from_rel_sp_id2(m, gsize, 
                     rel_sp_id2, posids_relS2_0);
                 S2 = state1D_from_spid(t+1, sp_id2, ncells);
+                // /* value checks
+                // if (tid == 0){
+                //     # if __CUDA_ARCH__>=200
+                //         printf("rel_sp_id2 %d \n", rel_sp_id2);
+                //         printf("sp_id2 %d \n", sp_id2);
+                //         printf("S2 %d \n", S2);
+                //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
+
+                //     #endif
+                // }
+                // */
                 D_coo_s2_arr[op_st_id + ith_nuq] = S2;         // store old_s2 value in the [.. + ith] position
                 D_coo_cnt_arr[op_st_id + ith_nuq] = count/nrzns;   // store prob value in the [.. + ith] position
                 ith_nuq++;                                      // increment i
@@ -947,13 +1038,13 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     if (nrzns % bDimx == 0)
         DimGrid_z = (nrzns/bDimx);
 
-    // checks
-    if (t == 0){
-        std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
-        std::cout<<"gisze= " << gsize << std::endl;
-        std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
-        std::cout<<"bDimx = " <<  bDimx << std::endl;
-    }
+    // // checks
+    // if (t == 0){
+    //     std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
+    //     std::cout<<"gisze= " << gsize << std::endl;
+    //     std::cout<<"DimGrid_z = " << DimGrid_z << std::endl;
+    //     std::cout<<"bDimx = " <<  bDimx << std::endl;
+    // }
  
 
     // initialse master S2 array
@@ -987,7 +1078,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         D_master_S2_arr);
 
     cudaDeviceSynchronize();
-    std::cout << " post transition_calc\n";
+    // std::cout << " post transition_calc\n";
     // int i = 0;
     // while (i>=0){
     //     if(i%100000000 == 0){
@@ -1028,13 +1119,13 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     compute_mean<<< blocks_per_grid, threads_per_block >>>(D_master_sumRsa_arr, Nthreads, nrzns);
     // TODO: in optimazation phase move this line after initilisation num_uq_S2 vectors.
     cudaDeviceSynchronize();
-    std::cout << " post compute mean\n";
+    // std::cout << " post compute mean\n";
 
     //initialising vectors for counting nnzs or number of uniqe S2s for S1s
-    std::cout << " ncells= " << ncells <<"\n";
+    // std::cout << " ncells= " << ncells <<"\n";
     thrust::device_vector<unsigned long long int> D_num_uq_s2(ncells,0);
     thrust::device_vector<unsigned long long int> D_prSum_num_uq_s2(ncells);
-    std::cout << " post device_vector\n";
+    // std::cout << " post device_vector\n";
 
     unsigned long long int* num_uq_s2_ptr = thrust::raw_pointer_cast(&D_num_uq_s2[0]);
     unsigned long long int* prSum_num_uq_s2_ptr = thrust::raw_pointer_cast(&D_prSum_num_uq_s2[0]);
@@ -1042,7 +1133,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     // count no. of ug unique S2 for each S1 and fill in num_uq_s2
     count_kernel<<<ncells, Nb>>>(D_master_S2_arr, nrzns, num_uq_s2_ptr);
     cudaDeviceSynchronize();
-    std::cout << " post count_kernel\n";
+    // std::cout << " post count_kernel\n";
 
         //CHECKs
         // std::cout << "D_num_uq_s2_pc\n";
@@ -1086,7 +1177,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
                                     ncells, nrzns, gsize, D_coo_s1_arr, D_coo_s2_arr, D_coo_cnt_arr, 
                                     num_uq_s2_ptr, prSum_num_uq_s2_ptr);
         cudaDeviceSynchronize();
-        std::cout << " post reduce_kernel\n";
+        // std::cout << " post reduce_kernel\n";
 
             //Checks
             // print_device_vector(D_coo_s1, 0, 10, "D_coo_s1", " ", 0);
