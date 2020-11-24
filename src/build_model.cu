@@ -777,12 +777,12 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                     r += r_step;
                     rs[i] = r;
                     sp_ids[i] = sp_id2;
-                    if (idx == 0){
-                        # if __CUDA_ARCH__>=200
-                            printf("-----inside transition kernel_2, %d\n", idx);
-                            printf("sp_ids[%d]= %lld \n", i, sp_id2);
-                        #endif
-                    }
+                    // if (idx == 0){
+                    //     # if __CUDA_ARCH__>=200
+                    //         printf("-----inside transition kernel_2, %d\n", idx);
+                    //         printf("sp_ids[%d]= %lld \n", i, sp_id2);
+                    //     #endif
+                    // }
                     
                 }
 

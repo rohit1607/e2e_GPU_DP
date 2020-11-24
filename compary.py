@@ -4,6 +4,7 @@ import numpy as np
 prob_name_1 = "src/data_modelOutput/time/test_g70x70x5_r5k/a1x4_i56_j56_ref1"
 prob_name_2 = "src/data_modelOutput/time/test_g70x70x5_r5k/a1x4_i56_j56_ref1_algo2"
 
+
 s1file1 = prob_name_1 + "/master_cooS1.npy"
 s1file2 = prob_name_2 + "/master_cooS1.npy"
 
@@ -125,11 +126,22 @@ def test():
     print("arr2: ", c)
     compare(a,c)
 
+def check_i_S1(S1_f1):
+    l = len(S1_f1)
+    print("length S1_f1= ", l)
+    for i in range(l):
+        if i != S1_f1[i][0]:
+            print (i, S1_f1[i][0])
+            break
 
-def print_coo(S1, S2, V, num_prints):
 
-    for i in range(num_prints):
-         print(i, "\t| ", S1[i][0], "\t", S2[i][0], "\t", V[i][0])
+def print_coo(S1, S2, V, print_range):
+
+    for i in range(print_range[0], print_range[1]):
+        try:
+            print(i, "\t| ", S1[i][0], "\t", S2[i][0], "\t", V[i][0])
+        except:
+            print(i, " probably out of bounds")
 
 # # test()
 # compare(S1_f1, S1_f2)
@@ -139,5 +151,13 @@ def print_coo(S1, S2, V, num_prints):
 
 # verbose_compare(S1_f1, S1_f2, 3000, 5000)
 # verbose_compare(S2_f1, S2_f2, 0, 100)
+check_i_S1(S1_f2)
+
 compare_coo_verbose(S1_f1, S1_f2, S2_f1, S2_f2, V_f1, V_f2)
+print(" ************************************* ")
 # check_consecutive_pairs(S1_f2)
+print_range =[18670, 18685]
+
+print_coo(S1_f1,  S2_f1,  V_f1, print_range)
+print(" ************************************* ")
+print_coo(S1_f2, S2_f2, V_f2, print_range)

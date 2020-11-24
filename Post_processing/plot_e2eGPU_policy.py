@@ -707,7 +707,7 @@ if __name__ == "__main__":
     dt = params[4]
     F = params[3]
     endpos = (int(params[8]),int(params[9])) 
-    startpos = (int(0.15*gsize), int(0.15*gsize))
+    startpos = (int(0.5*gsize), int(0.5*gsize))
 
     print("CHECK PARAMS")
     print("gsize =", gsize)
@@ -794,9 +794,9 @@ if __name__ == "__main__":
     print("No interpol: ", t_sp_list, "\navg=", np.mean(t_sp_list))
     print("WITH interpol: ", interp_t_sp_list, "\navg=", np.mean(interp_t_sp_list))
     
-    dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
-                            vel_field_data, scalar_field_data,
-                            fpath, fname='Trajectories')
+    # dynamic_plot_sequence_and_gif(interp_traj_list, g, policy_1d, 
+    #                         vel_field_data, scalar_field_data,
+    #                         fpath, fname='Trajectories')
     
     
     
