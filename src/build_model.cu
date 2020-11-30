@@ -47,7 +47,7 @@ thrust::host_vector<long long int> &H_master_cooS1,
 
 
 // template<typename dType> template not working for thrust vectors
-void print_device_vector(thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method);
+void print_device_vector(thrust::device_vector<float> &array, int start_id, int end_id, std::string array_name, std::string end, int method);
 void make_dir(std::string dir_name);
 void populate_ac_angles(float* ac_angles, int num_ac_angles);
 void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax);
@@ -656,7 +656,7 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                             float* all_u_mat, float* all_v_mat, float* all_ui_mat, float* all_vi_mat, float* all_Yi,
                             float* D_all_s_mat, int* D_all_mask_mat,
                             float ac_speed, float ac_angle, float* xs, float* ys, float* params, float* sumR_sa, 
-                            float* results){
+                            float* results, int32_t action_id){
                             // resutls directions- 1: along S2;  2: along S1;    3: along columns towards count
     int32_t gsize = params[0];          // size of grid along 1 direction. ASSUMING square grid.
     int32_t nrzns = params[2]; 
@@ -721,18 +721,19 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
         // compute areas
         get_areas(params, cx_cy, area_counts);
 
-        // for(int i=0; i<4; i++){
-        //     if (idx == 0){
-        //         # if __CUDA_ARCH__>=200
-        //             printf("-----trans_kern: cx cy areas, %d \n", idx);
-        //                 // printf("sp_id2[%d]= %d \n", i, sp_id2);
-        //                 // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
-        //                 // printf("cx, cy = %f, %f \n", cx_cy[0], cx_cy[1]);
-        //                 printf("areas[%d] = %f \n", i, area_counts[i]);
-        //             // printf("rel_sp_id2 %d \n", rel_sp_id2);
-        //         #endif
-        //     }
-        // }
+        if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+            for(int i=0; i<4; i++){
+                # if __CUDA_ARCH__>=200
+                    printf("--trans_kern, spid = %lld, T=%d: areas[%d] = %f, %d \n", sp_id, T, i, area_counts[i]);
+                        // printf("sp_id2[%d]= %d \n", i, sp_id2);
+                        printf("posids_temp= %d, %d \n", posids_temp[0], posids_temp[1]);
+                        printf("cx, cy = %f, %f \n", cx_cy[0], cx_cy[1]);
+                    // printf("rel_sp_id2 %d \n", rel_sp_id2);
+                #endif
+            }
+        }
+
+  
 
         // if s1 not terminal
         if (is_terminal(posids[0], posids[1], params) == false){
@@ -743,30 +744,29 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                 // moves agent and adds r_outbound and r_terminal to r
                 for(int i=0; i<4; i++){
 
-                    // if (idx == 0){
-                    //     # if __CUDA_ARCH__>=200
-                    //         printf("-----trans_kern: PRE-move(), %d\n", i);
-                    //             // printf("sp_id2[%d]= %d \n", i, sp_id2);
-                    //             // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
-                    //             printf("posids (i,j) = %d, %d \n", posids[0], posids[1]);
-                            
-                    //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
-                    //     #endif
-                    // }
+                    if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+                        # if __CUDA_ARCH__>=200
+                            // printf("-----trans_kern: PRE-move(), %d\n", i);
+                            // printf("sp_id2[%d]= %d \n", i, sp_id2);
+                            // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+                            printf("-----trans_kern: PRE-move(), %d, posids (i,j) = %d, %d \n", i, posids[0], posids[1]);
+                            // printf("rel_sp_id2 %d \n", rel_sp_id2);
+                        #endif
+                    }
+                
 
                     move(ac_speed, ac_angle, vx, vy, T, xs, ys, params, i + 1, posids_S1, posids, pos_xy, &r);
                     
                     
-                    // if (idx == 0){
-                    //     # if __CUDA_ARCH__>=200
-                    //         printf("-----trans_kern: POST-move(), %d\n", i);
-                    //             // printf("sp_id2[%d]= %d \n", i, sp_id2);
-                    //             // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
-                    //             printf("posids (i,j) = %d, %d \n", posids[0], posids[1]);
-                            
-                    //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
-                    //     #endif
-                    // }
+                    if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+                        # if __CUDA_ARCH__>=200
+                            printf("-----trans_kern: POST-move(), %d: posids (i,j) = %d, %d \n", i, posids[0], posids[1]);
+                            // printf("sp_id2[%d]= %d \n", i, sp_id2);
+                            // printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+                            // printf("posids (i,j) = %d, %d \n", posids[0], posids[1]);
+                            // printf("rel_sp_id2 %d \n", rel_sp_id2);
+                        #endif
+                    }
 
 
                     sp_id2 = get_sp_id_from_posid(posids, gsize);
@@ -777,12 +777,12 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                     r += r_step;
                     rs[i] = r;
                     sp_ids[i] = sp_id2;
-                    // if (idx == 0){
-                    //     # if __CUDA_ARCH__>=200
-                    //         printf("-----inside transition kernel_2, %d\n", idx);
-                    //         printf("sp_ids[%d]= %lld \n", i, sp_id2);
-                    //     #endif
-                    // }
+                    if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+                        # if __CUDA_ARCH__>=200
+                            printf("-----inside transition kernel_2, %d: sp_ids[%d]= %lld \n", idx, i, sp_id2);
+                            // printf("sp_ids[%d]= %lld \n", i, sp_id2);
+                        #endif
+                    }
                     
                 }
 
@@ -799,19 +799,29 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
                 }
             }
         }
+        else{   // that is S1 is terminal
+            int32_t mid_cell_idx =((m*m) -1)/2; // centre cell rel_idx of neighb grid
+            sp_id2 = sp_id;
+            for(int i=0; i<4; i++){
+                rel_sp_ids[i] = mid_cell_idx;
+                rs[i] = 0;
+                sp_ids[i] = sp_id2;
+            }
+   
+        }
 
-        // if (idx == 0){
-        //     # if __CUDA_ARCH__>=200
-        //         printf("-----inside transition kernel_2, %d\n", idx);
-        //         for(int i=0; i<4; i++){
-        //             // printf("sp_ids[%d]= %d \n", i, sp_ids[i]);
-        //             printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
-        //             // printf("S2 %d \n", S2);
-        //         }
+        if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+            # if __CUDA_ARCH__>=200
+                printf("-----inside transition kernel_2, %d\n", idx);
+                for(int i=0; i<4; i++){
+                    // printf("sp_ids[%d]= %d \n", i, sp_ids[i]);
+                    printf("rel_sp_ids[%d]= %d \n", i, rel_sp_ids[i]);
+                    // printf("S2 %d \n", S2);
+                }
                 
-        //         // printf("rel_sp_id2 %d \n", rel_sp_id2);
-        //     #endif
-        // }
+                // printf("rel_sp_id2 %d \n", rel_sp_id2);
+            #endif
+        }
 
         float b;
         float area;
@@ -820,6 +830,21 @@ __global__ void transition_calc(float* T_arr, long long int ncells,
             area = area_counts[i];
             b = atomicAdd(&results[res_idx], area);
         }
+
+
+        __syncthreads();
+        if (sp_id == 80 && T==18 && action_id == 1 && threadIdx.x==0){
+            # if __CUDA_ARCH__>=200
+                printf("-----inside transition kernel_3 %d\n", idx);
+                    // printf("sp_ids[%d]= %d \n", i, sp_ids[i]);
+                    // printf("area[%d]= %f \n", i, area);
+                    printf("results[%lld]= %f \n", res_idx, results[res_idx]);
+                    // printf("S2 %d \n", S2);
+                
+                // printf("rel_sp_id2 %d \n", rel_sp_id2);
+            #endif
+        }
+
         // __syncthreads();
 
         //writing to sumR_sa. this array will later be divided by nrzns, to get the avg
@@ -888,7 +913,7 @@ __global__ void reduce_kernel(float* D_master_S2_arr_ip, int t, int Nb, int m,
     long long int sp_id2;
     long long int S2;
     long long int sp_id1 = tid;
-    float count; //first if eval will lead to else condition and do  count++ 
+    float count=0; //first if eval will lead to else condition and do  count++ 
     int32_t posids_relS2_0[2];
     int32_t posids_S1[2];
  
@@ -1075,10 +1100,14 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
         ncells, D_all_u_arr, D_all_v_arr, D_all_ui_arr, D_all_vi_arr, D_all_yi_arr,
         D_all_s_arr, D_all_mask_arr,
         ac_speed, ac_angle, xs, ys, params, D_master_sumRsa_arr, 
-        D_master_S2_arr);
+        D_master_S2_arr, action_id);
 
     cudaDeviceSynchronize();
-    // std::cout << " post transition_calc\n";
+    if (t == 18){
+        std::cout << "action-id= " << action_id << "\n";
+        print_device_vector(D_master_S2_vector, 0, ncells*Nb, "D_master_S2_arr", " ", 2);
+    }
+        // std::cout << " post transition_calc\n";
     // int i = 0;
     // while (i>=0){
     //     if(i%100000000 == 0){
@@ -1724,7 +1753,7 @@ cnpy::NpyArray read_velocity_field_data( std::string file_path_name, int* n_elem
 
 
 // template<typename dType>
-void print_device_vector( thrust::device_vector<long long int> &array, int start_id, int end_id, std::string array_name, std::string end, int method){
+void print_device_vector( thrust::device_vector<float> &array, int start_id, int end_id, std::string array_name, std::string end, int method){
     std::cout << array_name << "  from id " << start_id << "  to  " << end_id << std::endl;
     if (method == 1){
         float temp = -10000000;
@@ -1741,6 +1770,20 @@ void print_device_vector( thrust::device_vector<long long int> &array, int start
     else if (method == 0){
         for(int i = start_id; i < end_id; i++)
             std::cout << array[i] << " " << end;
+    }
+
+    else if (method == 2){ 
+        int count = 0;
+        for(int i = start_id; i < end_id; i++){
+            if (i%26 == 0){
+                std::cout << "\n" << count << " |\t";
+                count++;
+            }
+            std::cout << array[i] << " " << end;
+
+
+        }
+
     }
 
     else

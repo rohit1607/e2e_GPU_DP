@@ -707,7 +707,7 @@ if __name__ == "__main__":
     dt = params[4]
     F = params[3]
     endpos = (int(params[8]),int(params[9])) 
-    startpos = (int(0.5*gsize), int(0.5*gsize))
+    startpos = (int(0.2*gsize), int(0.2*gsize))
 
     print("CHECK PARAMS")
     print("gsize =", gsize)
