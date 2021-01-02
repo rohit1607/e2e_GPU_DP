@@ -142,11 +142,17 @@ bool is_edge_state(int32_t i, int32_t j, int gsize){
 }
 
 
-bool is_in_obstacle(int sp_id, int T, long long int ncells, int* all_mask_mat){
+bool is_in_obstacle(long long int sp_id, int T, long long int ncells, int* all_mask_mat){
     //returns true if obstacle is present in state T,i,j
 
     long long int mean_id = state1D_from_spid(T, sp_id, ncells);
-    return(all_mask_mat[mean_id] == 1 );
+    // std::cout<< "--check 8 : mean_id = " << mean_id <<  "\n";
+    // std::cout << "T = " << T << "\n";
+    // std::cout << "sp_id = " << sp_id << "\n";
+    // std::cout << "ncells = " << ncells << "\n";
+
+
+    return (all_mask_mat[mean_id] == 1 );
 
 }
 
@@ -234,12 +240,20 @@ void move(float ac_speed, float ac_angle, float vx, float vy, int32_t T, float* 
     float Di = fabsf(ys[1] - ys[0]);
     int32_t i0 = posids[0];
     int32_t j0 = posids[1];
+    // std::cout << "posids = " << posids[0] << ", " << posids[1] << "\n";
+    // std::cout << "i0, j0 = " << i0 << ", " << j0 << "\n";
+
     float vnetx = F*cosf(ac_angle) + vx;
     float vnety = F*sinf(ac_angle) + vy;
     float x, y;
     get_xypos_from_ij(i0, j0, gsize, xs, ys, &x, &y); // x, y stores centre coords of state i0,j0
     float xnew = x + (vnetx * dt);
     float ynew = y + (vnety * dt);
+    // std::cout << "x, y = " << x << ", " << y << "\n";
+    // std::cout << "vx, vy = " << vx << ", " << vy << "\n";
+    // std::cout << "vnetx, vnety = " << vnetx << ", " << vnety << "\n";
+    // std::cout << "xnew, ynew = " << xnew << ", " << ynew << "\n";
+
     // float r_step = 0;
     *r = 0;         // intiilaise r with 0
 
@@ -397,6 +411,10 @@ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2, int T,
 
     // returns true if the transition involves going through obstacle
     // std::cout<< "inside func goes_through_obstacle\n";
+    // std::cout<< "--check pre-5 \n";
+    // std::cout << "sp_id1 = " << sp_id1 << "\n";
+    // std::cout << "sp_id2 = " << sp_id2 << "\n";
+
     bool possible_collision = false;
     int posid1[2];
     int posid2[2];
@@ -408,13 +426,25 @@ bool goes_through_obstacle(long long int sp_id1, long long int sp_id2, int T,
     int imax = max(posid1[0], posid2[0]);
     int jmin = min(posid1[1], posid2[1]);
     int jmax = max(posid1[1], posid2[1]);
+    // std::cout<< "--check 5 \n";
+    // std::cout << "imin = " << imin << "\n";
+    // std::cout << "imax = " << imax << "\n";
+    // std::cout << "jmin = " << jmin << "\n";
+    // std::cout << "jmax = " << jmax << "\n";
     
+
     for(int i=imin; i<=imax; i++){
         for(int j=jmin; j<=jmax; j++){
             if(!(i==posid1[0]&&j==posid1[1])){
                 sp_id = j + gsize*i*1LL ;
+                // std::cout << "check 5a: sp_id = " << sp_id << "\n";
+                // std::cout << "gsize = " << gsize << "\n";
+                // std::cout << "i = " << i << "\n";
+
                 if ( is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) || is_in_obstacle(sp_id, T+1, ncells, D_all_mask_mat)){
+                    // std::cout<< "--check 6 \n";
                     if (is_within_band(i, j, posid1[0], posid1[1], posid2[0], posid2[1], xs, ys, gsize) == true){
+                        // std::cout<< "--check 7 \n";
                         possible_collision = true;
                         return true;
                     }
@@ -476,7 +506,9 @@ void transition_calc(float* T_arr, long long int ncells,
                 get_posids_from_sp_id(sp_id, gsize, posids);
                 get_posids_from_sp_id(sp_id, gsize, posids_S1);
                 rzn_id = k;
-                
+                // std::cout << "posids = " << posids[0] << ", " << posids[1] << "\n";
+                // std::cout << "posids__S1 = " << posids_S1[0] << ", " << posids_S1[1] << "\n";
+
                 //  Afer move() these will be overwritten by i and j values of S2
                 float r=0;              // to store immediate reward
                 float r_step;
@@ -490,23 +522,37 @@ void transition_calc(float* T_arr, long long int ncells,
                 // if s1 not terminal
                 if (is_terminal(posids[0], posids[1], params) == false){
                     // if s1 not in obstacle
+                    // std::cout<< "--check 1\n";
+
                     if (is_in_obstacle(sp_id, T, ncells, D_all_mask_mat) == false){
+                        // std::cout<< "--check 2\n";
 
                         // moves agent and adds r_outbound and r_terminal to r
                         move(ac_speed, ac_angle, vx, vy, T, xs, ys, posids, params, &r);
+                        // std::cout << "posids = " << posids[0] << ", " << posids[1] << "\n";
+                        // std::cout << "posids__S1 = " << posids_S1[0] << ", " << posids_S1[1] << "\n";
+        
                         sp_id2 = get_sp_id_from_posid(posids, gsize);
+                        // std::cout << "sp_id2 = " << sp_id2 << "\n";
+
+
                         // extract_radiation(sp_id2, T+1, ncells, D_all_s_mat, &rad2);
                         rad2=0;
+                        // std::cout<< "--check 3 post move\n";
 
                         // adds one step-reward based on method. mehthod is available in params
                         r_step = calculate_one_step_reward(ac_speed, ac_angle, rad1, rad2, params);
                         r += r_step;
+                        // std::cout<< "--check 4 post onestep\n";
 
                         // if S2 is an obstacle cell. then penalise with r_outbound
                         // if (is_in_obstacle(sp_id2, T+1, ncells, D_all_mask_mat) == true )
                         //     r = r_outbound;
                         if (goes_through_obstacle(sp_id, sp_id2, T, ncells, D_all_mask_mat, xs, ys, params) == true)
                             r = r_outbound;
+                        
+                        // std::cout<< "--check 5 post goesthouthg\n";
+
                     }
                     // if s1 is in obstacle, then no update to posid
                     else
@@ -693,7 +739,7 @@ void build_sparse_transition_model_at_T_at_a(int t, int action_id, int bDimx, th
     // checks
     // if (t == nt-2){
         // std::cout << "t = " << t << "\n nt = " << nt << "\n" ; 
-        // std::cout<<"gisze= " << gsize << std::endl;
+        // std::cout<<"check 1 : gisze= " << gsize << std::endl;
     // }
  
     // initialse master S2 array

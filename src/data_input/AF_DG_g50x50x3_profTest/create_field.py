@@ -375,7 +375,7 @@ def plot_modes_of_rank_reduced_field(dg, t, n_modes):
     
 
 
-init_gsize = 25
+init_gsize = 20
 nt = 3
 dt = 10/nt
 dxy = 2/init_gsize
@@ -387,7 +387,7 @@ w_range = ( pi/10, 8*pi/10 )
 wy = 0.5*pi
 wx = pi
 # interpolates 
-interpolate_degree = 2
+interpolate_degree = 1
 final_gsize = init_gsize*interpolate_degree
 
 

@@ -21,6 +21,16 @@ run_build_model_and_convert_coo: build_model
 build_model: 
 	nvcc -o bin/build_model build_model.cu -L/usr/local/ -lcnpy -lz --std=c++11
 
+
+run_serial_build_model_and_convert_coo: serial_build_model
+	CUDA_VISIBLE_DEVICES=0 ./bin/serial_build_model
+	python convert_model_datatype.py
+	cp temp_modelOp_dirName.txt ../Post_processing/temp_modelOp_dirName.txt
+
+serial_build_model:
+	nvcc -o bin/serial_build_model serial_build_model.cu -L/usr/local/ -lcnpy -lz --std=c++11
+
+
 clean:
 	rm -f build_model.o get_funcs.o extract_field.o move_and_rewards.o utils.o
 	rm -f bin/build_model bin/spvi_2
