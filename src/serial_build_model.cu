@@ -858,237 +858,242 @@ int main(){
 
 // -------------------- input data starts here ---------------------------------
 
-
-    #include "input_to_build_model.h"
- 
-    int reward_type = get_reward_type(prob_type);
-    std::cout << "Reward type: " << reward_type << "\n";
-
-    // define full problem name and print them to a temporary file
-    // the temp file will be read by python scripts for conversion
-    std::string prob_specs = get_prob_name(num_ac_speeds, num_ac_angles, i_term, 
-                                            j_term, term_subgrid_size);
-    std::string op_Fname_upto_prob_name = "data_modelOutput/" + prob_type + "/"
-                                 + prob_name + "/" ;
-    std::string op_FnamePfx = op_Fname_upto_prob_name + prob_specs + "/"; //path for storing op npy data.
-    std::ofstream fout("temp_modelOp_dirName.txt");
-    fout << prob_type << "\n";
-    fout << prob_name << "\n";
-    fout << prob_specs << "\n";
-    fout << op_FnamePfx;
-    fout.close();
-
-    // TODO: 1. read paths form file xx DONE
-    //       2. Make sure files are stored in np.float32 format
-    std::string data_path = "data_input/" + prob_name + "/";
-    std::string all_u_fname = data_path + "all_u_mat.npy";
-    std::string all_v_fname = data_path + "all_v_mat.npy";
-    std::string all_ui_fname = data_path + "all_ui_mat.npy";
-    std::string all_vi_fname = data_path + "all_vi_mat.npy";
-    std::string all_yi_fname = data_path + "all_Yi.npy";
-    std::string all_s_fname = data_path + "all_s_mat.npy";
-    std::string all_mask_fname = data_path + "obstacle_mask.npy"; //this file stored in int32
+    for (int case_id = 9; case_id < 10; case_id++){
 
 
+        #include "input_to_build_model.h"
+        int num_ac_speeds = 1; //verify prob_type
+        int num_ac_angles = 16*(case_id+1);
+        int32_t num_actions = num_ac_speeds*num_ac_angles;
 
-// -------------------- input data ends here ---------------------------------
+        int reward_type = get_reward_type(prob_type);
+        std::cout << "Reward type: " << reward_type << "\n";
 
-    // make directory for storing output data from this file
-    make_dir(op_Fname_upto_prob_name);
-    make_dir(op_FnamePfx);
+        // define full problem name and print them to a temporary file
+        // the temp file will be read by python scripts for conversion
+        std::string prob_specs = get_prob_name(num_ac_speeds, num_ac_angles, i_term, 
+                                                j_term, term_subgrid_size);
+        std::string op_Fname_upto_prob_name = "data_modelOutput/" + prob_type + "/"
+                                    + prob_name + "/" ;
+        std::string op_FnamePfx = op_Fname_upto_prob_name + prob_specs + "/"; //path for storing op npy data.
+        std::ofstream fout("temp_modelOp_dirName.txt");
+        fout << prob_type << "\n";
+        fout << prob_name << "\n";
+        fout << prob_specs << "\n";
+        fout << op_FnamePfx;
+        fout.close();
 
-    int all_u_n_elms;
-    int all_v_n_elms;
-    int all_ui_n_elms;
-    int all_vi_n_elms;
-    int all_yi_n_elms;
-    int all_s_n_elms;
-    int all_mask_n_elms;
-
-    cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
-    cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
-    cnpy::NpyArray all_ui_cnpy = read_velocity_field_data(all_ui_fname, &all_ui_n_elms);
-    cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
-    cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
-    cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
-    cnpy::NpyArray all_mask_cnpy = read_velocity_field_data(all_mask_fname, &all_mask_n_elms);
+        // TODO: 1. read paths form file xx DONE
+        //       2. Make sure files are stored in np.float32 format
+        std::string data_path = "data_input/" + prob_name + "/";
+        std::string all_u_fname = data_path + "all_u_mat.npy";
+        std::string all_v_fname = data_path + "all_v_mat.npy";
+        std::string all_ui_fname = data_path + "all_ui_mat.npy";
+        std::string all_vi_fname = data_path + "all_vi_mat.npy";
+        std::string all_yi_fname = data_path + "all_Yi.npy";
+        std::string all_s_fname = data_path + "all_s_mat.npy";
+        std::string all_mask_fname = data_path + "obstacle_mask.npy"; //this file stored in int32
 
 
-    float* all_u_mat = all_u_cnpy.data<float>();
-    float* all_v_mat = all_v_cnpy.data<float>();
-    float* all_ui_mat = all_ui_cnpy.data<float>();
-    float* all_vi_mat = all_vi_cnpy.data<float>();
-    float* all_yi_mat = all_yi_cnpy.data<float>();
-    float* all_s_mat = all_s_cnpy.data<float>();
-    int* all_mask_mat = all_mask_cnpy.data<int>();
 
-    // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
-    // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
-    // print_array<float>(all_yi_mat, all_yi_n_elms,"all_yi_mat", " ");
+    // -------------------- input data ends here ---------------------------------
 
-    std::cout << "Finished reading Velocity Field Data !" << std::endl;
-    assert(neighb_gsize <= gsize);
+        // make directory for storing output data from this file
+        make_dir(op_Fname_upto_prob_name);
+        make_dir(op_FnamePfx);
 
-    //TODO: fill params in a function
-    // Contains implicit casting from int32_t to float
-    thrust::host_vector<float> H_params(32);
-    H_params[0] = gsize;
-    H_params[1] = num_actions; 
-    H_params[2] = nrzns;
-    H_params[3] = F;
-    H_params[4] = dt;
-    H_params[5] = r_outbound;
-    H_params[6] = r_terminal;
-    H_params[7] = nmodes;
-    H_params[8] = i_term;
-    H_params[9] = j_term;
-    H_params[10] = nt;
-    H_params[11] = is_stationary;
-    H_params[12] = term_subgrid_size;
-    H_params[13] = reward_type;
-    H_params[14] = num_ac_speeds;
-    H_params[15] = num_ac_angles;
-    H_params[16] = dx;
-    H_params[17] = dy;
-    H_params[18] = neighb_gsize; // referred to as m in functions
+        int all_u_n_elms;
+        int all_v_n_elms;
+        int all_ui_n_elms;
+        int all_vi_n_elms;
+        int all_yi_n_elms;
+        int all_s_n_elms;
+        int all_mask_n_elms;
 
-    for( int i =20; i<32; i++)
-        H_params[i] = z;
+        cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
+        cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
+        cnpy::NpyArray all_ui_cnpy = read_velocity_field_data(all_ui_fname, &all_ui_n_elms);
+        cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
+        cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
+        cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
+        cnpy::NpyArray all_mask_cnpy = read_velocity_field_data(all_mask_fname, &all_mask_n_elms);
 
-    // Define grid ticks in host
-    thrust::host_vector<float> H_xs(gsize, -1);
-    thrust::host_vector<float> H_ys(gsize, -1);
-    float* xs = thrust::raw_pointer_cast(&H_xs[0]);
-    float* ys = thrust::raw_pointer_cast(&H_ys[0]);
-    //TODO:  2. move the fucntion to a separate file
-    define_xs_or_ys(xs, dx, x0, gsize);
-    define_xs_or_ys(ys, dy, y0, gsize);
 
-    // define angles in host
-    float** H_actions = new float*[num_actions];
-    for(int i=0; i<num_actions; i++)
-        H_actions[i] = new float[2];
-    populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
-    std::cout << "CHECK:   ACTIONS:    \n";
-    for(int i=0; i<num_actions; i++){
-        std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
+        float* all_u_mat = all_u_cnpy.data<float>();
+        float* all_v_mat = all_v_cnpy.data<float>();
+        float* all_ui_mat = all_ui_cnpy.data<float>();
+        float* all_vi_mat = all_vi_cnpy.data<float>();
+        float* all_yi_mat = all_yi_cnpy.data<float>();
+        float* all_s_mat = all_s_cnpy.data<float>();
+        int* all_mask_mat = all_mask_cnpy.data<int>();
+
+        // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
+        // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
+        // print_array<float>(all_yi_mat, all_yi_n_elms,"all_yi_mat", " ");
+
+        std::cout << "Finished reading Velocity Field Data !" << std::endl;
+        assert(neighb_gsize <= gsize);
+
+        //TODO: fill params in a function
+        // Contains implicit casting from int32_t to float
+        thrust::host_vector<float> H_params(32);
+        H_params[0] = gsize;
+        H_params[1] = num_actions; 
+        H_params[2] = nrzns;
+        H_params[3] = F;
+        H_params[4] = dt;
+        H_params[5] = r_outbound;
+        H_params[6] = r_terminal;
+        H_params[7] = nmodes;
+        H_params[8] = i_term;
+        H_params[9] = j_term;
+        H_params[10] = nt;
+        H_params[11] = is_stationary;
+        H_params[12] = term_subgrid_size;
+        H_params[13] = reward_type;
+        H_params[14] = num_ac_speeds;
+        H_params[15] = num_ac_angles;
+        H_params[16] = dx;
+        H_params[17] = dy;
+        H_params[18] = neighb_gsize; // referred to as m in functions
+
+        for( int i =20; i<32; i++)
+            H_params[i] = z;
+
+        // Define grid ticks in host
+        thrust::host_vector<float> H_xs(gsize, -1);
+        thrust::host_vector<float> H_ys(gsize, -1);
+        float* xs = thrust::raw_pointer_cast(&H_xs[0]);
+        float* ys = thrust::raw_pointer_cast(&H_ys[0]);
+        //TODO:  2. move the fucntion to a separate file
+        define_xs_or_ys(xs, dx, x0, gsize);
+        define_xs_or_ys(ys, dy, y0, gsize);
+
+        // define angles in host
+        float** H_actions = new float*[num_actions];
+        for(int i=0; i<num_actions; i++)
+            H_actions[i] = new float[2];
+        populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
+        std::cout << "CHECK:   ACTIONS:    \n";
+        for(int i=0; i<num_actions; i++){
+            std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
+        }
+
+
+        std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
+
+        thrust::host_vector<float> H_tdummy(2,0);
+
+
+        // initialise reuseable host vectors
+        thrust::host_vector<int32_t> H_coo_len_per_ac(num_actions);
+        thrust::host_vector<long long int> H_Aarr_of_cooS1[(int)num_actions];
+        thrust::host_vector<long long int> H_Aarr_of_cooS2[(int)num_actions];
+        thrust::host_vector<float> H_Aarr_of_cooProb[(int)num_actions];
+        thrust::host_vector<float> H_Aarr_of_Rs[(int)num_actions];
+        //initialised with 0 size. later data from device is inserted/appended to the end of vector
+        for (int i =0; i < num_actions; i++){
+            H_Aarr_of_cooS1[i] = thrust::host_vector<long long int> (0);
+        }
+        for (int i =0; i < num_actions; i++){
+            H_Aarr_of_cooS2[i] = thrust::host_vector<long long int> (0);
+        }
+        for (int i =0; i < num_actions; i++){
+            H_Aarr_of_cooProb[i] = thrust::host_vector<float> (0);
+        }
+        for (int i =0; i < num_actions; i++){
+            H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
+        }
+
+        ncells = gsize*gsize;           // assign value to global variable
+
+        // run time loop and compute transition data for each time step
+        auto start = high_resolution_clock::now(); 
+        auto end = high_resolution_clock::now(); 
+        auto duration_t = duration_cast<microseconds>(end - start);
+        //IMP: Run time loop till nt-1. There ar no S2s to S1s in the last timestep
+        for(int t = 0; t < nt-1; t++){
+            std::cout << "*** Computing data for timestep, T = " << t << std::endl;
+            H_tdummy[0] = t;
+            start = high_resolution_clock::now(); 
+                for(int action_id = 0; action_id < num_actions; action_id++){
+                    // std::cout << "  * action_id= " << action_id;
+                    // this function also concats coos across time.
+                    build_sparse_transition_model_at_T_at_a(t, action_id, bDimx, H_tdummy, all_u_mat, all_v_mat, 
+                            all_ui_mat, all_vi_mat, all_yi_mat,
+                            all_s_mat, all_mask_mat,
+                            H_params, H_xs, H_ys, H_actions, 
+                            H_coo_len_per_ac,
+                            H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
+                            H_Aarr_of_Rs);
+                            //  output_data )  
+                }
+            end = high_resolution_clock::now(); 
+            std::cout << std::endl ;
+            duration_t = duration_cast<microseconds>(end - start);
+            std::cout << "duration@t = "<< duration_t.count()/1e6 << "sec" << std::endl;
+            std::cout << std::endl << std::endl;
+        }
+
+
+        // fill R vectors of each action for the last time step with high negative values. 
+        // this has to be done seaprately because the above loop runs till nt-1.
+        /*
+            TODO: 1. Verify rewards as last time step
+        */
+        thrust::host_vector<float> H_rewards_at_end_t(ncells, 0);
+        for (int i =0; i < num_actions; i++){
+            H_Aarr_of_Rs[i].insert(H_Aarr_of_Rs[i].end(), H_rewards_at_end_t.begin(), H_rewards_at_end_t.end());
+        }
+        //Check
+        for (int i =0; i < num_actions; i++)
+            std::cout << H_Aarr_of_Rs[i].size() << " ";
+        
+
+        // find nnz per action
+        thrust::host_vector<long long int> H_master_PrSum_nnz_per_ac(num_actions);
+        long long int DP_relv_params[2] = {ncells*nt, num_actions*1LL};
+
+        long long int master_nnz = 0;       //running sum of nnz going across actions
+        // calculate inclusive prefix sum of nnz's across actions 
+        // will be used to access indeces while concatenating results across across actions
+        for(int i = 0; i < num_actions; i++){
+            master_nnz += H_Aarr_of_cooS1[i].size();
+            H_master_PrSum_nnz_per_ac[i] = master_nnz;
+        }
+
+        print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
+        unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
+        std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
+        std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
+
+        //checks
+        std::cout << "total/master_nnz = " << master_nnz << std::endl;
+        std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
+        // for(int i = 0; i < num_actions; i++)
+        //     std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
+        print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
+
+
+        // save final coo data
+        thrust::host_vector<long long int> H_master_cooS1(master_nnz);
+        thrust::host_vector<long long int> H_master_cooS2(master_nnz);
+        thrust::host_vector<float> H_master_cooVal(master_nnz);
+        thrust::host_vector<float> H_master_R(ncells*nt*num_actions, -99999); //TODO: veriffy -99999
+        save_master_Coos_to_file(op_FnamePfx, num_actions,
+                                    H_master_cooS1, 
+                                    H_master_cooS2, 
+                                    H_master_cooVal,
+                                    H_master_R,
+                                    H_Aarr_of_cooS1,
+                                    H_Aarr_of_cooS2,
+                                    H_Aarr_of_cooProb,
+                                    H_Aarr_of_Rs,
+                                    H_params,
+                                    DP_relv_params,
+                                    num_DP_params);
+
     }
-
-
-    std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
-
-    thrust::host_vector<float> H_tdummy(2,0);
-
-
-    // initialise reuseable host vectors
-    thrust::host_vector<int32_t> H_coo_len_per_ac(num_actions);
-    thrust::host_vector<long long int> H_Aarr_of_cooS1[(int)num_actions];
-    thrust::host_vector<long long int> H_Aarr_of_cooS2[(int)num_actions];
-    thrust::host_vector<float> H_Aarr_of_cooProb[(int)num_actions];
-    thrust::host_vector<float> H_Aarr_of_Rs[(int)num_actions];
-    //initialised with 0 size. later data from device is inserted/appended to the end of vector
-    for (int i =0; i < num_actions; i++){
-        H_Aarr_of_cooS1[i] = thrust::host_vector<long long int> (0);
-    }
-    for (int i =0; i < num_actions; i++){
-        H_Aarr_of_cooS2[i] = thrust::host_vector<long long int> (0);
-    }
-    for (int i =0; i < num_actions; i++){
-        H_Aarr_of_cooProb[i] = thrust::host_vector<float> (0);
-    }
-    for (int i =0; i < num_actions; i++){
-        H_Aarr_of_Rs[i] = thrust::host_vector<float> (0);
-    }
-
-    ncells = gsize*gsize;           // assign value to global variable
-
-    // run time loop and compute transition data for each time step
-    auto start = high_resolution_clock::now(); 
-    auto end = high_resolution_clock::now(); 
-    auto duration_t = duration_cast<microseconds>(end - start);
-    //IMP: Run time loop till nt-1. There ar no S2s to S1s in the last timestep
-    for(int t = 0; t < nt-1; t++){
-        std::cout << "*** Computing data for timestep, T = " << t << std::endl;
-        H_tdummy[0] = t;
-        start = high_resolution_clock::now(); 
-            for(int action_id = 0; action_id < num_actions; action_id++){
-                // std::cout << "  * action_id= " << action_id;
-                // this function also concats coos across time.
-                build_sparse_transition_model_at_T_at_a(t, action_id, bDimx, H_tdummy, all_u_mat, all_v_mat, 
-                        all_ui_mat, all_vi_mat, all_yi_mat,
-                        all_s_mat, all_mask_mat,
-                        H_params, H_xs, H_ys, H_actions, 
-                        H_coo_len_per_ac,
-                        H_Aarr_of_cooS1, H_Aarr_of_cooS2, H_Aarr_of_cooProb,
-                        H_Aarr_of_Rs);
-                        //  output_data )  
-            }
-        end = high_resolution_clock::now(); 
-        std::cout << std::endl ;
-        duration_t = duration_cast<microseconds>(end - start);
-        std::cout << "duration@t = "<< duration_t.count()/1e6 << "sec" << std::endl;
-        std::cout << std::endl << std::endl;
-    }
-
-
-    // fill R vectors of each action for the last time step with high negative values. 
-    // this has to be done seaprately because the above loop runs till nt-1.
-    /*
-        TODO: 1. Verify rewards as last time step
-    */
-    thrust::host_vector<float> H_rewards_at_end_t(ncells, 0);
-    for (int i =0; i < num_actions; i++){
-        H_Aarr_of_Rs[i].insert(H_Aarr_of_Rs[i].end(), H_rewards_at_end_t.begin(), H_rewards_at_end_t.end());
-    }
-    //Check
-    for (int i =0; i < num_actions; i++)
-        std::cout << H_Aarr_of_Rs[i].size() << " ";
-    
-
-    // find nnz per action
-    thrust::host_vector<long long int> H_master_PrSum_nnz_per_ac(num_actions);
-    long long int DP_relv_params[2] = {ncells*nt, num_actions*1LL};
-
-    long long int master_nnz = 0;       //running sum of nnz going across actions
-    // calculate inclusive prefix sum of nnz's across actions 
-    // will be used to access indeces while concatenating results across across actions
-    for(int i = 0; i < num_actions; i++){
-        master_nnz += H_Aarr_of_cooS1[i].size();
-        H_master_PrSum_nnz_per_ac[i] = master_nnz;
-    }
-
-    print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
-    unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
-    std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
-    std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
-
-    //checks
-    std::cout << "total/master_nnz = " << master_nnz << std::endl;
-    std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
-    for(int i = 0; i < num_actions; i++)
-        std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
-    print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
-
-
-    // save final coo data
-    thrust::host_vector<long long int> H_master_cooS1(master_nnz);
-    thrust::host_vector<long long int> H_master_cooS2(master_nnz);
-    thrust::host_vector<float> H_master_cooVal(master_nnz);
-    thrust::host_vector<float> H_master_R(ncells*nt*num_actions, -99999); //TODO: veriffy -99999
-    save_master_Coos_to_file(op_FnamePfx, num_actions,
-                                H_master_cooS1, 
-                                H_master_cooS2, 
-                                H_master_cooVal,
-                                H_master_R,
-                                H_Aarr_of_cooS1,
-                                H_Aarr_of_cooS2,
-                                H_Aarr_of_cooProb,
-                                H_Aarr_of_Rs,
-                                H_params,
-                                DP_relv_params,
-                                num_DP_params);
-
-
     return 0;
 }
 
@@ -1269,7 +1274,7 @@ void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, f
     for (int i=0; i<num_ac_speeds; i++){
         for(int j=0; j<num_ac_angles; j++){
             idx = j + num_ac_angles*i;
-            std::cout << ac_speeds[i] << "\n";
+            // std::cout << ac_speeds[i] << "\n";
             H_actions[idx][0] = ac_speeds[i];
             H_actions[idx][1] = ac_angles[j];
         }

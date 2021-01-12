@@ -1,0 +1,327 @@
+nvcc -o bin/serial_build_model serial_build_model.cu -L/usr/local/ -lcnpy -lz --std=c++11
+Makefile:31: recipe for target 'serial_build_model' failed
+nvcc -o bin/serial_build_model serial_build_model.cu -L/usr/local/ -lcnpy -lz --std=c++11
+CUDA_VISIBLE_DEVICES=0 ./bin/serial_build_model
+Reward type: 2
+mkdir_status = 256
+mkdir_status = 256
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_u_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_v_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_ui_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+1  1  1  1  1  1  1  1  1  1  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_vi_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_Yi.npy
+shape: 3 , 1000 , 3 , 
+num_elements: 9000
+First 10 elements of loaded array are: 
+2  2  2  2  2  2  2  2  2  2  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_s_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/obstacle_mask.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+Finished reading Velocity Field Data !
+infunc CHeck- num_ac_speeds = 1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+CHECK:   ACTIONS:    
+1, 0
+1, 0.392699
+1, 0.785398
+1, 1.1781
+1, 1.5708
+1, 1.9635
+1, 2.35619
+1, 2.74889
+1, 3.14159
+1, 3.53429
+1, 3.92699
+1, 4.31969
+1, 4.71239
+1, 5.10509
+1, 5.49779
+1, 5.89049
+Copied to Device : Velocity Field Data !
+*** Computing data for timestep, T = 0
+
+duration@t = 33.0222sec
+
+
+*** Computing data for timestep, T = 1
+
+duration@t = 31.1786sec
+
+
+30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 30000 DP_relv_params
+30000  16  
+chek num = 16
+chek denom = 8
+total/master_nnz = 476784
+H_Aarr_of_cooS1[i].size()
+29699
+29699
+29699
+29799
+29799
+29799
+29899
+29899
+29899
+29899
+29899
+29799
+29799
+29799
+29699
+29699
+H_Aarr_of_cooS2[0]
+3  4  5  6  7  8  9  10  11  12  
+in save 
+in save 
+in save 
+in save 
+check num_DP_params = 2
+op_FnamePfx= data_modelOutput/energy2/Scalability_test_all_jet_g100x100x3_r1k/a1x16_i80_j80_ref1/
+Reward type: 2
+mkdir_status = 256
+mkdir_status = 0
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_u_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_v_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_ui_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+1  1  1  1  1  1  1  1  1  1  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_vi_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_Yi.npy
+shape: 3 , 1000 , 3 , 
+num_elements: 9000
+First 10 elements of loaded array are: 
+2  2  2  2  2  2  2  2  2  2  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_s_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/obstacle_mask.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+Finished reading Velocity Field Data !
+infunc CHeck- num_ac_speeds = 2
+0.5
+1
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+0.5
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+CHECK:   ACTIONS:    
+0.5, 0
+0.5, 0.392699
+0.5, 0.785398
+0.5, 1.1781
+0.5, 1.5708
+0.5, 1.9635
+0.5, 2.35619
+0.5, 2.74889
+0.5, 3.14159
+0.5, 3.53429
+0.5, 3.92699
+0.5, 4.31969
+0.5, 4.71239
+0.5, 5.10509
+0.5, 5.49779
+0.5, 5.89049
+1, 0
+1, 0.392699
+1, 0.785398
+1, 1.1781
+1, 1.5708
+1, 1.9635
+1, 2.35619
+1, 2.74889
+1, 3.14159
+1, 3.53429
+1, 3.92699
+1, 4.31969
+1, 4.71239
+1, 5.10509
+1, 5.49779
+1, 5.89049
+Copied to Device : Velocity Field Data !
+*** Computing data for timestep, T = 0
+Makefile:26: recipe for target 'run_serial_build_model_and_convert_coo' failed
+nvcc -o bin/serial_build_model serial_build_model.cu -L/usr/local/ -lcnpy -lz --std=c++11
+CUDA_VISIBLE_DEVICES=0 ./bin/serial_build_model
+Reward type: 2
+mkdir_status = 256
+mkdir_status = 256
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_u_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_v_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_ui_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+1  1  1  1  1  1  1  1  1  1  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_vi_mat.npy
+shape: 3 , 3 , 100 , 100 , 
+num_elements: 90000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_Yi.npy
+shape: 3 , 1000 , 3 , 
+num_elements: 9000
+First 10 elements of loaded array are: 
+2  2  2  2  2  2  2  2  2  2  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/all_s_mat.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+file path and name:   data_input/Scalability_test_all_jet_g100x100x3_r1k/obstacle_mask.npy
+shape: 3 , 100 , 100 , 
+num_elements: 30000
+First 10 elements of loaded array are: 
+0  0  0  0  0  0  0  0  0  0  
+
+Finished reading Velocity Field Data !
+infunc CHeck- num_ac_speeds = 1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+CHECK:   ACTIONS:    
+1, 0
+1, 0.392699
+1, 0.785398
+1, 1.1781
+1, 1.5708
+1, 1.9635
+1, 2.35619
+1, 2.74889
+1, 3.14159
+1, 3.53429
+1, 3.92699
+1, 4.31969
+1, 4.71239
+1, 5.10509
+1, 5.49779
+1, 5.89049
+Copied to Device : Velocity Field Data !
+*** Computing data for timestep, T = 0
+Makefile:26: recipe for target 'run_serial_build_model_and_convert_coo' failed

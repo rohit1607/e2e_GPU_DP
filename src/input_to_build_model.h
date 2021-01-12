@@ -11,9 +11,9 @@ float x0 = dx/2;
 float y0 = dy/2;
 
 float F = 1;
-int num_ac_speeds = 1; //verify prob_type
-int num_ac_angles = 16;
-int32_t num_actions = num_ac_speeds*num_ac_angles;
+// int num_ac_speeds = 1; //verify prob_type
+// int num_ac_angles = 16;
+// int32_t num_actions = num_ac_speeds*num_ac_angles;
 
 int32_t nrzns = 1000;     // verify with probname
 int32_t bDimx = nrzns;
