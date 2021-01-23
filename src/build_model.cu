@@ -1069,6 +1069,9 @@ int main(){
 
 
     #include "input_to_build_model.h"
+    // int num_ac_speeds = 1; //verify prob_type
+    // int num_ac_angles = 16*(case_id+1);
+    // int32_t num_actions = num_ac_speeds*num_ac_angles;
 
     if (nrzns >= 1000)
     bDimx = 1000;
