@@ -1026,7 +1026,7 @@ int get_reward_type(std::string prob_type){
 
 
 
-int main(){
+int main(int argc, char* argv[]){
 
 // -------------------- input data starts here ---------------------------------
 
@@ -1072,12 +1072,15 @@ int main(){
     // int num_ac_speeds = 1; //verify prob_type
     // int num_ac_angles = 16*(case_id+1);
     // int32_t num_actions = num_ac_speeds*num_ac_angles;
-
-    if (nrzns >= 1000)
-    bDimx = 1000;
+    nt = 50;
+    gsize = strtol(argv[1], NULL, 0);
+    bDimx = strtol(argv[2], NULL, 0);
+        // if (nrzns >= 1000)
+        // bDimx = 1000;
+    assert(bDimx <= 1024);
  
     int reward_type = get_reward_type(prob_type);
-    std::cout << "Reward type: " << reward_type << "\n";
+        // std::cout << "Reward type: " << reward_type << "\n";
 
     // define full problem name and print them to a temporary file
     // the temp file will be read by python scripts for conversion
@@ -1109,39 +1112,57 @@ int main(){
 // -------------------- input data ends here ---------------------------------
 
     // make directory for storing output data from this file
-    make_dir(op_Fname_upto_prob_name);
-    make_dir(op_FnamePfx);
+        // make_dir(op_Fname_upto_prob_name);
+        // make_dir(op_FnamePfx);
 
-    int all_u_n_elms;
-    int all_v_n_elms;
-    int all_ui_n_elms;
-    int all_vi_n_elms;
-    int all_yi_n_elms;
-    int all_s_n_elms;
-    int all_mask_n_elms;
+    int all_u_n_elms = gsize*gsize*nt;
+    int all_v_n_elms = gsize*gsize*nt;
+    int all_ui_n_elms = gsize*gsize*nt*nmodes;
+    int all_vi_n_elms = gsize*gsize*nt*nmodes;
+    int all_yi_n_elms = nmodes*nrzns*nt;
+    int all_s_n_elms = gsize*gsize*nt;
+    int all_mask_n_elms = gsize*gsize*nt;
 
-    cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
-    cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
-    cnpy::NpyArray all_ui_cnpy = read_velocity_field_data(all_ui_fname, &all_ui_n_elms);
-    cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
-    cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
-    cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
-    cnpy::NpyArray all_mask_cnpy = read_velocity_field_data(all_mask_fname, &all_mask_n_elms);
+        // int all_u_n_elms;
+        // int all_v_n_elms;
+        // int all_ui_n_elms;
+        // int all_vi_n_elms;
+        // int all_yi_n_elms;
+        // int all_s_n_elms;
+        // int all_mask_n_elms;
+
+        // cnpy::NpyArray all_u_cnpy = read_velocity_field_data(all_u_fname, &all_u_n_elms);
+        // cnpy::NpyArray all_v_cnpy = read_velocity_field_data(all_v_fname, &all_v_n_elms);
+        // cnpy::NpyArray all_ui_cnpy = read_velocity_field_data(all_ui_fname, &all_ui_n_elms);
+        // cnpy::NpyArray all_vi_cnpy = read_velocity_field_data(all_vi_fname, &all_vi_n_elms);
+        // cnpy::NpyArray all_yi_cnpy = read_velocity_field_data(all_yi_fname, &all_yi_n_elms);
+        // cnpy::NpyArray all_s_cnpy = read_velocity_field_data(all_s_fname, &all_s_n_elms);
+        // cnpy::NpyArray all_mask_cnpy = read_velocity_field_data(all_mask_fname, &all_mask_n_elms);
 
 
-    float* all_u_mat = all_u_cnpy.data<float>();
-    float* all_v_mat = all_v_cnpy.data<float>();
-    float* all_ui_mat = all_ui_cnpy.data<float>();
-    float* all_vi_mat = all_vi_cnpy.data<float>();
-    float* all_yi_mat = all_yi_cnpy.data<float>();
-    float* all_s_mat = all_s_cnpy.data<float>();
-    int* all_mask_mat = all_mask_cnpy.data<int>();
+        // float* all_u_mat = all_u_cnpy.data<float>();
+        // float* all_v_mat = all_v_cnpy.data<float>();
+        // float* all_ui_mat = all_ui_cnpy.data<float>();
+        // float* all_vi_mat = all_vi_cnpy.data<float>();
+        // float* all_yi_mat = all_yi_cnpy.data<float>();
+        // float* all_s_mat = all_s_cnpy.data<float>();
+        // int* all_mask_mat = all_mask_cnpy.data<int>();
+
+
+    // remove this once done looping over problem sizes
+    float* all_u_mat = new float[all_u_n_elms];
+    float* all_v_mat = new float[all_v_n_elms];
+    float* all_ui_mat = new float[all_ui_n_elms];
+    float* all_vi_mat = new float[all_vi_n_elms];
+    float* all_yi_mat = new float[all_yi_n_elms];
+    float* all_s_mat = new float[all_s_n_elms]{0};
+    int* all_mask_mat = new int[all_mask_n_elms]{0};
 
     // print_array<float>(all_u_mat, all_u_n_elms, "all_u_mat", " ");
     // print_array<float>(all_ui_mat, all_ui_n_elms,"all_ui_mat", " ");
     // print_array<float>(all_yi_mat, all_yi_n_elms,"all_yi_mat", " ");
 
-    std::cout << "Finished reading Velocity Field Data !" << std::endl;
+        // std::cout << "Finished reading Velocity Field Data !" << std::endl;
     assert(neighb_gsize <= gsize);
 
     //TODO: fill params in a function
@@ -1184,10 +1205,10 @@ int main(){
     for(int i=0; i<num_actions; i++)
         H_actions[i] = new float[2];
     populate_actions(H_actions, num_ac_speeds, num_ac_angles, F);
-    std::cout << "CHECK:   ACTIONS:    \n";
-    for(int i=0; i<num_actions; i++){
-        std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
-    }
+        // std::cout << "CHECK:   ACTIONS:    \n";
+        // for(int i=0; i<num_actions; i++){
+        //     std::cout << H_actions[i][0] << ", " << H_actions[i][1] << "\n";
+        // }
 
     //TODO: move to custom functions
     // populate_ac_angles(ac_angles, num_actions);
@@ -1215,7 +1236,7 @@ int main(){
     int* D_all_mask_arr = thrust::raw_pointer_cast(&D_all_mask_vec[0]);
 
 
-    std::cout << "Copied to Device : Velocity Field Data !" << std::endl;
+        // std::cout << "Copied to Device : Velocity Field Data !" << std::endl;    
 
     thrust::device_vector<float> D_tdummy(2,0);
     // initialise empty device vectors. These contain time-invariant data
@@ -1249,13 +1270,21 @@ int main(){
     D_xs = H_xs;
     D_ys = H_ys;
 
-    // run time loop and compute transition data for each time step
-    auto start = high_resolution_clock::now(); 
-    auto end = high_resolution_clock::now(); 
-    auto duration_t = duration_cast<microseconds>(end - start);
+  // run time loop and compute transition data for each time step
+  auto start = high_resolution_clock::now(); 
+  auto end = high_resolution_clock::now(); 
+  auto duration_t = duration_cast<microseconds>(end - start);
+  
+  auto overall_start = high_resolution_clock::now(); 
+  auto overall_end = high_resolution_clock::now(); 
+  auto overall_duration_t = duration_cast<microseconds>(overall_end - overall_start);
+  
+  float first_four_ts[4];
+  float total_exec_time;
+
     //IMP: Run time loop till nt-1. There ar no S2s to S1s in the last timestep
     for(int t = 0; t < nt-1; t++){
-        std::cout << "*** Computing data for timestep, T = " << t << std::endl;
+        // std::cout << "*** Computing data for timestep, T = " << t << std::endl;
         D_tdummy[0] = t;
         start = high_resolution_clock::now(); 
             for(int action_id = 0; action_id < num_actions; action_id++){
@@ -1271,14 +1300,22 @@ int main(){
                         H_Aarr_of_Rs);
                         //  output_data )  
             }
-        end = high_resolution_clock::now(); 
-        std::cout << std::endl ;
-        duration_t = duration_cast<microseconds>(end - start);
-        std::cout << "duration@t = "<< duration_t.count()/1e6 << "sec" << std::endl;
-        std::cout << std::endl << std::endl;
+         end = high_resolution_clock::now(); 
+            duration_t = duration_cast<microseconds>(end - start);
+            if (t<4){
+                first_four_ts[t] = duration_t.count()/1e6;
+            }
     }
 
+    overall_end = high_resolution_clock::now(); 
+    overall_duration_t = duration_cast<microseconds>(overall_end - overall_start);
+    total_exec_time = overall_duration_t.count()/1e6;
 
+    std::cout << gsize << ",\t" << ncells << ",\t" << nt << ",\t" << ncells*nt << ",\t"  
+            << bDimx << ",\t" << num_actions << ",\t" << nrzns << ",\t" <<  nmodes << ",\t" << neighb_gsize << ",\t";
+    for (int i=0; i<4; i++)
+        std::cout << first_four_ts[i] << ",\t";
+    std::cout << total_exec_time << "\n";
     // fill R vectors of each action for the last time step with high negative values. 
     // this has to be done seaprately because the above loop runs till nt-1.
     /*
@@ -1289,8 +1326,8 @@ int main(){
         H_Aarr_of_Rs[i].insert(H_Aarr_of_Rs[i].end(), H_rewards_at_end_t.begin(), H_rewards_at_end_t.end());
     }
     //Check
-    for (int i =0; i < num_actions; i++)
-        std::cout << H_Aarr_of_Rs[i].size() << " ";
+        // for (int i =0; i < num_actions; i++)
+        //     std::cout << H_Aarr_of_Rs[i].size() << " ";
     
 
     // find nnz per action
@@ -1305,17 +1342,17 @@ int main(){
         H_master_PrSum_nnz_per_ac[i] = master_nnz;
     }
 
-    print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
+        // print_array<long long int>(DP_relv_params, 2, "DP_relv_params", " ");
     unsigned long int num_DP_params = sizeof(DP_relv_params) / sizeof(DP_relv_params[0]);
-    std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
-    std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
+        // std::cout << "chek num = " << sizeof(DP_relv_params) << std::endl;
+        // std::cout << "chek denom = " << sizeof(DP_relv_params[0]) << std::endl;
 
-    //checks
-    std::cout << "total/master_nnz = " << master_nnz << std::endl;
-    std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
-    for(int i = 0; i < num_actions; i++)
-        std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
-    print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
+        // //checks
+        // std::cout << "total/master_nnz = " << master_nnz << std::endl;
+        // std::cout << "H_Aarr_of_cooS1[i].size()" << std::endl;
+        // for(int i = 0; i < num_actions; i++)
+        //     std::cout << H_Aarr_of_cooS1[i].size() << std::endl;
+        // print_array<long long int>(&H_Aarr_of_cooS2[0][0], 10,  "H_Aarr_of_cooS2[0]", " ");
 
 
     // save final coo data
@@ -1323,18 +1360,18 @@ int main(){
     thrust::host_vector<long long int> H_master_cooS2(master_nnz);
     thrust::host_vector<float> H_master_cooVal(master_nnz);
     thrust::host_vector<float> H_master_R(ncells*nt*num_actions, -99999); //TODO: veriffy -99999
-    save_master_Coos_to_file(op_FnamePfx, num_actions,
-                                H_master_cooS1, 
-                                H_master_cooS2, 
-                                H_master_cooVal,
-                                H_master_R,
-                                H_Aarr_of_cooS1,
-                                H_Aarr_of_cooS2,
-                                H_Aarr_of_cooProb,
-                                H_Aarr_of_Rs,
-                                H_params,
-                                DP_relv_params,
-                                num_DP_params);
+    // save_master_Coos_to_file(op_FnamePfx, num_actions,
+    //                             H_master_cooS1, 
+    //                             H_master_cooS2, 
+    //                             H_master_cooVal,
+    //                             H_master_R,
+    //                             H_Aarr_of_cooS1,
+    //                             H_Aarr_of_cooS2,
+    //                             H_Aarr_of_cooProb,
+    //                             H_Aarr_of_Rs,
+    //                             H_params,
+    //                             DP_relv_params,
+    //                             num_DP_params);
 
 
     return 0;
@@ -1510,7 +1547,7 @@ void populate_ac_angles(float* ac_angles, int num_ac_angles){
 
 void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
     //fills array with ac_speeds
-    std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
+    // std::cout << "infunc CHeck- num_ac_speeds = " << num_ac_speeds << "\n";
     float delF = 0;
     if (num_ac_speeds == 1)
         ac_speeds[0] = Fmax;
@@ -1523,7 +1560,7 @@ void populate_ac_speeds(float* ac_speeds, int num_ac_speeds, float Fmax){
         delF = Fmax/(num_ac_speeds);
         for(int i = 0; i<num_ac_speeds; i++){
             ac_speeds[i] = (i+1)*delF;
-            std::cout << ac_speeds[i] << "\n";
+            // std::cout << ac_speeds[i] << "\n";
         }
     }
     else
@@ -1545,7 +1582,7 @@ void populate_actions(float **H_actions, int num_ac_speeds, int num_ac_angles, f
     for (int i=0; i<num_ac_speeds; i++){
         for(int j=0; j<num_ac_angles; j++){
             idx = j + num_ac_angles*i;
-            std::cout << ac_speeds[i] << "\n";
+            // std::cout << ac_speeds[i] << "\n";
             H_actions[idx][0] = ac_speeds[i];
             H_actions[idx][1] = ac_angles[j];
         }

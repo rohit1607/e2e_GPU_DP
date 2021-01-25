@@ -865,7 +865,7 @@ int main(int argc, char* argv[]){
         // int num_ac_speeds = 1; //verify prob_type
         // int num_ac_angles = 16*(case_id+1);
         // int32_t num_actions = num_ac_speeds*num_ac_angles;
-        nt = 5;
+        nt = 200;
         gsize = strtol(argv[1], NULL, 0);
 
 
